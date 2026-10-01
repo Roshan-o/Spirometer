@@ -1,254 +1,80 @@
-# BreathNote: A Smart Incentive Spirometer
+# BreathNote
 
-**Course Project Report — Semester 7**
+## Features
 
-| | |
-|---|---|
-| **Team Members** | K. Roshan Lal (2023102010) · P. Deepak (2023101109) |
-| **Project Title** | Sensor-Based Smart Incentive Spirometer with Carnatic Music Feedback |
-| **Submission Date** | October 2026 |
+### Implemented
 
----
+- **Account access:** signup, login, and logout. Passwords are stored as bcrypt hashes, and successful authentication uses a seven-day `httpOnly` session cookie.
+- **Progress dashboard:** reads the signed-in user's exercise-session records from PostgreSQL and presents peak-pressure and sustain-duration metrics, weekly session counts, a pressure trend, a 14-day consistency view, and up to four recent sessions.
+- **Per-user data access:** dashboard session queries are scoped to the user ID from the verified session cookie.
 
-## Abstract
+### Designed, not yet connected
 
-Incentive spirometry is a clinically prescribed lung rehabilitation exercise that requires patients to sustain consistent daily effort. However, the repetitive and monotonous nature of conventional spirometers leads to poor patient adherence and makes it difficult to track long-term progress.
+- **Breathing-session capture:** read pressure samples from an Arduino using the browser Web Serial API and animate a virtual spirometer.
+- **Level-based audio:** provide Carnatic music feedback based on pressure thresholds.
+- **Session persistence:** save completed sessions and repetitions. The database supports these records, but the app does not currently have a session-write action or API endpoint.
 
-This project presents **BreathNote**, a smart incentive spirometer that replaces the mechanical device with a sensor-integrated web application. The system uses a pressure sensor and Arduino microcontroller to capture the user's real-time breathing effort, which is visualized as an animated virtual ball rising through predefined levels on a browser interface. As the user crosses each pressure threshold, the application rewards them with level-based Carnatic music — replacing the traditional silence with culturally resonant, motivating audio feedback.
+## APIs and Routes
 
-All exercise data is securely stored in a cloud database against individual user accounts, enabling a personalized progress dashboard that tracks metrics such as peak pressure, sustain duration, session count, and improvement trends over time.
+The application uses Next.js App Router pages and Server Actions. It does not currently expose a conventional REST API under `app/api`; Server Actions are framework-managed calls, not stable REST endpoints.
 
----
-
-## 1. Motivation
-
-Conventional incentive spirometers provide minimal feedback — a floating ball that rises when the user blows, and drops when they stop. This design:
-
-- Provides no **historical tracking** of the patient's effort or improvement.
-- Offers no **motivational stimulus** beyond the visual of the ball.
-- Cannot be used to **compare sessions** or set progressive goals.
-- Makes the exercise feel **clinically cold** and repetitive, leading to abandonment.
-
-Our motivation is to address all four of these shortcomings simultaneously:
-
-1. Make the exercise **visually engaging** through a dynamic, animated digital interface.
-2. Make it **aurally rewarding** through Carnatic music feedback tied to effort levels.
-3. Make it **measurable** by recording and surfacing session data in a dashboard.
-4. Make it **personalized** so each user sees only their own progress.
-
----
-
-## 2. System Architecture
-
-The system is composed of four interconnected layers:
-
-```
-┌────────────────────┐        USB / Serial        ┌──────────────────────┐
-│  Hardware Layer    │ ─────────────────────────► │  Browser Layer       │
-│                    │                             │                      │
-│  Blow Pipe         │    Raw pressure integers    │  Web Serial API      │
-│  Pressure Sensor   │    (e.g., 0–1023)           │  React State Update  │
-│  Arduino Uno       │                             │  Ball Animation      │
-└────────────────────┘                             │  Audio Engine        │
-                                                   └──────────┬───────────┘
-                                                              │
-                                                    Session ends (POST)
-                                                              │
-                                                   ┌──────────▼───────────┐
-                                                   │  Application Layer   │
-                                                   │                      │
-                                                   │  Next.js (App Router)│
-                                                   │  Server Actions      │
-                                                   │  Prisma ORM          │
-                                                   └──────────┬───────────┘
-                                                              │
-                                                   ┌──────────▼───────────┐
-                                                   │  Data Layer          │
-                                                   │                      │
-                                                   │  Neon (PostgreSQL)   │
-                                                   │  users               │
-                                                   │  exercise_sessions   │
-                                                   │  repetitions         │
-                                                   └──────────────────────┘
-```
-
----
-
-## 3. Methodology
-
-### 3.1 Breathing Exercise
-The user blows through a tube attached to a pressure sensor. The generated air pressure is proportional to their breathing effort.
-
-### 3.2 Pressure Sensing
-A pressure sensor (e.g., MPX5010) measures the blow pressure. The Arduino reads the analog output at approximately 60 samples per second and transmits values over USB Serial.
-
-### 3.3 Real-Time Data Acquisition
-The web browser uses the **Web Serial API** to read the Arduino's USB output directly. This bypasses the need for a backend server in the data loop, eliminating latency and enabling smooth, frame-rate-level animation updates.
-
-### 3.4 Virtual Ball Display
-The raw sensor value (0–1023) is mapped to a height percentage (0–100%) on a stylized virtual spirometer tube. As pressure increases, the ball rises. Each of the five defined levels corresponds to a pressure threshold:
-
-| Level | Name (Carnatic) | Pressure Threshold |
+| Route / action | Type | Behavior |
 |---|---|---|
-| 1 | Sa | ≥ 0.5 kPa |
-| 2 | Ri | ≥ 1.0 kPa |
-| 3 | Ga | ≥ 1.5 kPa |
-| 4 | Ma | ≥ 2.0 kPa |
-| 5 | Pa | ≥ 2.5 kPa |
+| `/` | `GET` page | Displays the default Next.js starter page. |
+| `/login` | `GET` page | Displays the login and signup form. |
+| `/dashboard` | `GET` page | Verifies the `session` cookie and reads the user's exercise sessions through Prisma. If the cookie is missing or invalid, the page renders with empty/default dashboard data rather than redirecting. |
+| `signup(formData)` | Server Action | Reads `name`, `email`, and `password`; checks for an existing email; hashes the password with bcryptjs (10 rounds); creates the user; and sets the session cookie. Returns `{ success: true }` or `{ error: string }`. |
+| `login(formData)` | Server Action | Reads `email` and `password`; verifies the password hash; and sets the session cookie on success. Returns `{ success: true }` or `{ error: string }`. |
+| `logout()` | Server Action | Deletes the `session` cookie. |
 
-### 3.5 Level-Based Audio Feedback
-The audio engine operates as a state machine. When the ball crosses a threshold:
+The dashboard's server-side query is the only exercise-data read path. There are no implemented actions or endpoints to create, update, or delete sessions or repetitions. The dashboard links to `/exercise`, but that page does not currently exist.
 
-- **Below Level 1:** A soft encouragement sound plays.
-- **Levels 1–5:** A Carnatic note or musical phrase corresponding to that level begins playing, crossfading smoothly from the previous state.
+## Schema Design
 
-The use of Carnatic music is intentional — it provides culturally familiar, structured, and progressively rewarding audio cues that motivate the user to push harder and sustain longer.
+PostgreSQL separates account identity from exercise activity. A `User` has many `ExerciseSession` records, and each session has many `Repetition` records. UUID primary keys identify records; foreign keys enforce the relationships and cascade deletes. Timestamps use `TIMESTAMPTZ`, and pressure values use `DECIMAL(10,2)` to retain two decimal places.
 
-### 3.6 Data Storage
-At the conclusion of each session, the application aggregates the collected data and performs a single `POST` request to the Next.js backend, which saves the following to the database:
-
-- `start_time` and `end_time`
-- `duration_seconds`
-- `max_pressure_achieved`
-- `max_level_reached`
-- `max_level_hold_duration`
-- `number_of_repetitions`
-- Individual `repetitions` records for granular analysis
-
-### 3.7 Progress Dashboard
-The dashboard is generated server-side on each load by querying the user's historical session data. It presents:
-
-- **Peak Pressure Trend** — a 14-day line chart showing improvement.
-- **Consistency Calendar** — a visual grid showing days with completed, partial, or missed sessions.
-- **Week-over-week statistics** — with percentage changes for key metrics.
-- **Recent Sessions List** — the last 4 sessions with duration and pressure.
-
----
-
-## 4. Database Schema
+Prisma is the schema used by the project's `prisma db push` setup. Model fields use camelCase in TypeScript and map to snake_case table and column names in PostgreSQL.
 
 ### `users`
 
-| Column | Type | Notes |
+| Column | Type | Constraints / purpose |
 |---|---|---|
-| `id` | UUID | Primary key |
+| `id` | UUID | Primary key; generated by the database |
 | `name` | VARCHAR(255) | Display name |
-| `email` | VARCHAR(255) | Unique, used for login |
-| `password_hash` | VARCHAR(255) | bcrypt hashed (10 rounds) |
-| `created_at` | TIMESTAMPTZ | Auto-set on insert |
-| `updated_at` | TIMESTAMPTZ | Auto-updated on change |
+| `email` | VARCHAR(255) | Required and unique; used for login |
+| `password_hash` | VARCHAR(255) | Required bcrypt password hash |
+| `created_at` | TIMESTAMPTZ | Defaults to the current time |
+| `updated_at` | TIMESTAMPTZ | Automatically updated by Prisma |
 
 ### `exercise_sessions`
 
-| Column | Type | Notes |
+| Column | Type | Constraints / purpose |
 |---|---|---|
-| `id` | UUID | Primary key |
-| `user_id` | UUID | FK → `users.id` (CASCADE DELETE) |
-| `start_time` | TIMESTAMPTZ | Session start |
-| `end_time` | TIMESTAMPTZ | Session end |
-| `duration_seconds` | INTEGER | Total active time |
-| `max_pressure_achieved` | DECIMAL(10,2) | Peak pressure in kPa |
-| `max_level_reached` | INTEGER | Highest level crossed (1–5) |
-| `max_level_hold_duration` | INTEGER | Time held at max level (ms) |
-| `number_of_repetitions` | INTEGER | Total blow count |
-| `created_at` | TIMESTAMPTZ | Record insert time |
+| `id` | UUID | Primary key; generated by the database |
+| `user_id` | UUID | Required foreign key to `users.id`; cascade delete |
+| `start_time` | TIMESTAMPTZ | Required session start |
+| `end_time` | TIMESTAMPTZ | Required session end |
+| `duration_seconds` | INTEGER | Required total active duration |
+| `max_pressure_achieved` | DECIMAL(10,2) | Required peak pressure in kPa |
+| `max_level_reached` | INTEGER | Required highest level reached |
+| `max_level_hold_duration` | INTEGER | Required hold duration in milliseconds |
+| `number_of_repetitions` | INTEGER | Defaults to zero |
+| `created_at` | TIMESTAMPTZ | Defaults to the current time |
 
 ### `repetitions`
 
-| Column | Type | Notes |
+| Column | Type | Constraints / purpose |
 |---|---|---|
-| `id` | UUID | Primary key |
-| `session_id` | UUID | FK → `exercise_sessions.id` (CASCADE DELETE) |
-| `timestamp` | TIMESTAMPTZ | Time of this individual blow |
-| `max_pressure` | DECIMAL(10,2) | Peak pressure for this blow (kPa) |
-| `level_reached` | INTEGER | Level achieved in this blow |
-| `hold_duration` | INTEGER | Time held above threshold (ms) |
+| `id` | UUID | Primary key; generated by the database |
+| `session_id` | UUID | Required foreign key to `exercise_sessions.id`; cascade delete |
+| `timestamp` | TIMESTAMPTZ | Defaults to the current time |
+| `max_pressure` | DECIMAL(10,2) | Required peak pressure in kPa |
+| `level_reached` | INTEGER | Required level reached |
+| `hold_duration` | INTEGER | Required hold duration in milliseconds |
 
----
+### Relationships and indexes
 
-## 5. Authentication & Security
-
-- Passwords are hashed using **bcryptjs** with 10 salt rounds before storage. Plain-text passwords are never stored.
-- On successful login or signup, a **JWT (JSON Web Token)** is signed using a secret key and stored as an `httpOnly` cookie. This prevents JavaScript-based access to the token, mitigating XSS attacks.
-- JWTs expire after **7 days**. Subsequent requests are validated server-side before any database query is executed.
-- All database connections use **SSL** (`sslmode=require`) via the Neon connection string.
-
----
-
-## 6. Technology Justification
-
-| Choice | Alternative Considered | Reason for Selection |
-|---|---|---|
-| **Next.js** (full-stack) | Python (FastAPI) + React | Eliminates a separate backend process; Server Actions keep API logic co-located with UI |
-| **Neon DB** (Serverless PostgreSQL) | Firebase Firestore | Relational schema is a natural fit; free tier is very generous (9GB+) |
-| **Prisma ORM** | Raw SQL / Drizzle | Auto-generated TypeScript types eliminate runtime data-shape errors |
-| **Web Serial API** | WebSocket via Python bridge | Direct browser-to-Arduino connection with zero latency overhead |
-| **jose** (JWT) | NextAuth.js | Lightweight; full control over session claims without OAuth complexity |
-| **Carnatic music** | Generic beeps / Western music | Culturally resonant for the target demographic; structured raga system maps naturally to levels |
-
----
-
-## 7. Results
-
-The seeded dataset (14 days, 1 session/day) demonstrates the following measurable progression:
-
-| Metric | Day 1 | Day 14 | Improvement |
-|---|---|---|---|
-| Peak Pressure | 1.05 kPa | 2.40 kPa | **+128%** |
-| Max Level Reached | 1 | 5 | **+4 levels** |
-| Hold Duration | 1,200 ms | 4,000 ms | **+233%** |
-| Repetitions / Session | 3 | 8 | **+167%** |
-
-The dashboard correctly computes week-over-week deltas, displays the trend line, and marks the consistency calendar — validating the full data pipeline from Arduino → Browser → Neon → Dashboard.
-
----
-
-## 8. Limitations & Future Work
-
-| Limitation | Proposed Solution |
-|---|---|
-| Web Serial API is Chrome/Edge only | Ship a companion Electron or Tauri desktop app for broader browser support |
-| No clinician portal | Add a `doctors` table and role-based access control (RBAC) for physicians to review patient data |
-| Single-pressure sensor | Add flow-rate sensor (spirometry standard) for FEV1 / FVC measurement |
-| Audio files are static | Procedurally generate Carnatic raga phrases using the Web Audio API for infinite musical variety |
-| No mobile app | Expose a REST API layer and build a React Native companion app |
-
----
-
-## 9. Setup & Reproduction
-
-```bash
-# 1. Clone and install
-npm install
-
-# 2. Configure environment
-cp .env.example .env
-# Add your DATABASE_URL and JWT_SECRET
-
-# 3. Initialise database
-npx prisma generate --schema=prisma/schema.prisma
-npx prisma db push --schema=prisma/schema.prisma
-
-# 4. Optional: seed with demo data
-npx ts-node --project tsconfig.seed.json prisma/seed.ts
-
-# 5. Run development server
-npm run dev
-```
-
-Open **http://localhost:3000** in Google Chrome (required for Web Serial API).
-
-Demo login after seeding:
-- **Email:** `deepak@example.com`
-- **Password:** `password123`
-
----
-
-## 10. References
-
-1. American Association for Respiratory Care. *Clinical Practice Guideline: Incentive Spirometry.* Respiratory Care, 2011.
-2. Next.js Documentation — App Router & Server Actions. https://nextjs.org/docs
-3. Web Serial API Specification. W3C. https://wicg.github.io/serial/
-4. Prisma ORM Documentation. https://www.prisma.io/docs
-5. Neon Serverless PostgreSQL. https://neon.tech/docs
-6. Sambamurthy, P. *A Dictionary of South Indian Music and Musicians.* The Indian Music Publishing House, 1984.
+- One user can own many sessions; deleting a user deletes their sessions.
+- One session can contain many repetitions; deleting a session deletes its repetitions.
+- Email uniqueness is defined in Prisma. `schema.sql` also declares indexes on `exercise_sessions.user_id` and `repetitions.session_id`, but those indexes are not declared in `schema.prisma` and therefore are not part of the Prisma-managed schema as currently written.
+- The schema does not constrain level ranges, require `end_time` to follow `start_time`, or enforce that the repetition count matches the number of related repetition rows. A future session-write handler should validate these rules.
