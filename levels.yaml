@@ -1,0 +1,9 @@
+# Target pressure thresholds for each level (in kPa)
+easy: 2.0
+medium: 3.0
+hard: 4.0
+
+# Overall targets shown in the metric cards
+target_peak: 3.0
+target_exhale_hold: 8.0
+target_inhale_hold: 5.0

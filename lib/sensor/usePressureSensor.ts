@@ -32,10 +32,10 @@ export function usePressureSensor(initialKind: SensorKind = "sim", enabled = tru
     try {
       await instance.start((sample) => {
         if (generation.current !== id) return;
-        const clamped = Math.max(0, Math.min(2.5, sample));
-        smooth.current += 0.3 * (clamped - smooth.current);
+        const clamped = Math.max(-5.0, Math.min(5.0, sample));
+        smooth.current += 0.35 * (clamped - smooth.current);
         const now = performance.now();
-        if (now - lastUiUpdate.current >= 100) {
+        if (now - lastUiUpdate.current >= 50) {
           lastUiUpdate.current = now;
           setPressure(smooth.current);
         }
@@ -51,10 +51,10 @@ export function usePressureSensor(initialKind: SensorKind = "sim", enabled = tru
         simRef.current = fallback;
         await fallback.start((sample) => {
           if (generation.current !== id) return;
-          const clamped = Math.max(0, Math.min(2.5, sample));
-          smooth.current += 0.3 * (clamped - smooth.current);
+          const clamped = Math.max(-5.0, Math.min(5.0, sample));
+          smooth.current += 0.35 * (clamped - smooth.current);
           const now = performance.now();
-          if (now - lastUiUpdate.current >= 100) {
+          if (now - lastUiUpdate.current >= 50) {
             lastUiUpdate.current = now;
             setPressure(smooth.current);
           }

@@ -66,20 +66,60 @@ export class MicSource implements SensorSource {
 
 export class WebSocketSource implements SensorSource {
   private socket?: WebSocket;
+  private stopped = false;
+  private onSample?: (kPa: number) => void;
+
   async start(onSample: (kPa: number) => void) {
-    const url = process.env.NEXT_PUBLIC_SENSOR_WS_URL || "ws://localhost:8080";
-    await new Promise<void>((resolve, reject) => {
-      const socket = new WebSocket(url);
-      this.socket = socket;
-      socket.addEventListener("open", () => resolve(), { once: true });
-      socket.addEventListener("error", () => reject(new Error("Sensor connection failed")), { once: true });
-      socket.addEventListener("message", (event) => {
-        try {
-          const value = JSON.parse(String(event.data))?.kpa;
-          if (typeof value === "number" && Number.isFinite(value)) onSample(value);
-        } catch { /* Ignore malformed sensor packets. */ }
-      });
-    });
+    this.onSample = onSample;
+    this.stopped  = false;
+    await this.connect();
   }
-  stop() { this.socket?.close(); this.socket = undefined; }
+
+  private async connect(): Promise<void> {
+    const url = process.env.NEXT_PUBLIC_SENSOR_WS_URL || "ws://localhost:8765";
+    let delay = 500; // start retry at 500 ms
+
+    const attempt = (): Promise<void> =>
+      new Promise((resolve) => {
+        if (this.stopped) { resolve(); return; }
+
+        const socket = new WebSocket(url);
+        this.socket  = socket;
+
+        socket.addEventListener("open", () => resolve(), { once: true });
+
+        socket.addEventListener("error", () => {
+          socket.close();
+          if (this.stopped) { resolve(); return; }
+          console.warn(`[sensor] WS connection failed, retrying in ${delay} ms…`);
+          setTimeout(() => attempt().then(resolve), delay);
+          delay = Math.min(delay * 2, 8000); // cap at 8 s
+        }, { once: true });
+
+        socket.addEventListener("message", (event) => {
+          if (this.stopped) return;
+          try {
+            const value = JSON.parse(String(event.data))?.kpa;
+            if (typeof value === "number" && Number.isFinite(value) && this.onSample)
+              this.onSample(value);
+          } catch { /* Ignore malformed sensor packets. */ }
+        });
+
+        socket.addEventListener("close", () => {
+          if (this.stopped) return;
+          console.warn(`[sensor] WS closed, reconnecting in ${delay} ms…`);
+          setTimeout(() => attempt().then(resolve), delay);
+          delay = Math.min(delay * 2, 8000);
+        }, { once: true });
+      });
+
+    await attempt();
+  }
+
+  stop() {
+    this.stopped = true;
+    this.socket?.close();
+    this.socket  = undefined;
+    this.onSample = undefined;
+  }
 }
