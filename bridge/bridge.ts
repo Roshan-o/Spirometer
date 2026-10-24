@@ -34,7 +34,7 @@ const WS_PORT     = parseInt(getArg("--ws-port", "8765"), 10);
 // reach the top when you blow hard.
 //   npm run bridge -- --scale 30000   (lower = more sensitive)
 //   npm run bridge -- --scale 80000   (higher = less sensitive)
-let COUNTS_PER_KPA = parseInt(getArg("--scale", "50000"), 10);
+const COUNTS_PER_KPA = parseInt(getArg("--scale", "50000"), 10);
 
 // Zero offset is auto-learned from the first 3 seconds of idle readings.
 let ZERO_OFFSET = 0;

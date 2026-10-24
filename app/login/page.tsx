@@ -24,7 +24,7 @@ export default function AuthPage() {
       } else if (response?.success) {
         router.push("/dashboard"); // Redirect on success
       }
-    } catch (err) {
+    } catch {
       setError("An unexpected error occurred.");
     } finally {
       setLoading(false);

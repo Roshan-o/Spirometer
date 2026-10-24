@@ -7,8 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts",
-    "bridge": "npx ts-node --project tsconfig.bridge.json bridge/bridge.ts"
+    "bridge": "npx tsc --project tsconfig.bridge.json && node .bridge-out/bridge/bridge.js"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -30,6 +29,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/ws": "^8.18.2",
+    "@serialport/parser-readline": "^13.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.8",
     "prisma": "^5.22.0",
@@ -37,8 +37,5 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "ws": "^8.22.0"
-  },
-  "prisma": {
-    "seed": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts"
   }
 }

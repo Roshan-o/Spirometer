@@ -1,17 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MicSource, SensorKind, SensorSource, SensorStatus, SimulatedSource, WebSocketSource } from "./sources";
+import { SensorSource, SensorStatus, WebSocketSource } from "./sources";
 
-export function usePressureSensor(initialKind: SensorKind = "sim", enabled = true) {
+export function usePressureSensor() {
   const [pressure, setPressure] = useState(0);
-  const [status, setStatus] = useState<SensorStatus>(enabled ? "connecting" : "disconnected");
-  const [source, setSource] = useState(initialKind);
+  const [status, setStatus] = useState<SensorStatus>("connecting");
   const adapter = useRef<SensorSource | null>(null);
-  const simRef = useRef<SimulatedSource | null>(null);
-  const smooth = useRef(0);
   const generation = useRef(0);
-  const lastUiUpdate = useRef(0);
 
   const disconnect = useCallback(() => {
     generation.current++;
@@ -20,58 +16,30 @@ export function usePressureSensor(initialKind: SensorKind = "sim", enabled = tru
     setStatus("disconnected");
   }, []);
 
-  const connect = useCallback(async (kind: SensorKind) => {
+  const connect = useCallback(async () => {
     disconnect();
     const id = generation.current;
-    setSource(kind);
+    const source = new WebSocketSource();
+    adapter.current = source;
+    setPressure(0);
     setStatus("connecting");
-    smooth.current = 0;
-    const instance = kind === "sim" ? new SimulatedSource() : kind === "mic" ? new MicSource() : new WebSocketSource();
-    adapter.current = instance;
-    if (instance instanceof SimulatedSource) simRef.current = instance;
     try {
-      await instance.start((sample) => {
+      await source.start((sample) => {
         if (generation.current !== id) return;
-        const clamped = Math.max(-5.0, Math.min(5.0, sample));
-        smooth.current += 0.35 * (clamped - smooth.current);
-        const now = performance.now();
-        if (now - lastUiUpdate.current >= 50) {
-          lastUiUpdate.current = now;
-          setPressure(smooth.current);
-        }
+        const bounded = Math.max(-5, Math.min(5, sample));
+        setPressure((previous) => previous + 0.35 * (bounded - previous));
+      }, (nextStatus) => {
+        if (generation.current === id) setStatus(nextStatus);
       });
-      if (generation.current === id) setStatus("connected");
     } catch {
-      if (generation.current !== id) return;
-      instance.stop();
-      if (kind === "mic") {
-        setSource("sim");
-        const fallback = new SimulatedSource();
-        adapter.current = fallback;
-        simRef.current = fallback;
-        await fallback.start((sample) => {
-          if (generation.current !== id) return;
-          const clamped = Math.max(-5.0, Math.min(5.0, sample));
-          smooth.current += 0.35 * (clamped - smooth.current);
-          const now = performance.now();
-          if (now - lastUiUpdate.current >= 50) {
-            lastUiUpdate.current = now;
-            setPressure(smooth.current);
-          }
-        });
-        if (generation.current === id) setStatus("connected");
-        return;
-      }
-      setStatus("disconnected");
+      if (generation.current === id) setStatus("disconnected");
     }
   }, [disconnect]);
 
   useEffect(() => {
-    if (!enabled) return disconnect;
-    const startup = Promise.resolve().then(() => connect(initialKind));
+    const startup = Promise.resolve().then(connect);
     return () => { void startup; disconnect(); };
-  }, [connect, disconnect, enabled, initialKind]);
+  }, [connect, disconnect]);
 
-  const setBlowing = useCallback((value: boolean) => simRef.current?.setBlowing(value), []);
-  return { pressure, status, source, connect, disconnect, setBlowing };
+  return { pressure, status, connect, disconnect };
 }

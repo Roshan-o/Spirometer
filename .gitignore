@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.bridge-out/
 /out/
 
 # production

@@ -5,14 +5,16 @@
 ### Implemented
 
 - **Account access:** signup, login, and logout. Passwords are stored as bcrypt hashes, and successful authentication uses a seven-day `httpOnly` session cookie.
-- **Progress dashboard:** reads the signed-in user's exercise-session records from PostgreSQL and presents peak-pressure and sustain-duration metrics, weekly session counts, a pressure trend, a 14-day consistency view, and up to four recent sessions.
-- **Per-user data access:** dashboard session queries are scoped to the user ID from the verified session cookie.
+- **Protected user pages:** the dashboard and exercise page require a valid session. The root route sends signed-in users to the dashboard and other visitors to login.
+- **Live pressure input:** the exercise page reads kPa samples from the local serial-to-WebSocket bridge and animates the virtual spirometer. It does not substitute simulated readings when the hardware source is unavailable.
+- **Session capture:** elapsed active time, peak pressure, repetition count, per-repetition peak pressure and achieved level, and the longest continuous hold at one level are computed from live readings.
+- **Persistent history:** ending a session saves the session and its repetition rows to PostgreSQL under the authenticated user. The dashboard displays all of that user's saved sessions and aggregate measurements.
+- **No seeded demo records:** new databases start empty; users create accounts and dashboard values come from completed sensor sessions.
 
-### Designed, not yet connected
+### Not yet implemented
 
-- **Breathing-session capture:** read pressure samples from an Arduino using the browser Web Serial API and animate a virtual spirometer.
-- **Level-based audio:** provide Carnatic music feedback based on pressure thresholds.
-- **Session persistence:** save completed sessions and repetitions. The database supports these records, but the app does not currently have a session-write action or API endpoint.
+- **Level-based audio:** Carnatic music feedback based on pressure thresholds.
+- **Hardware calibration:** the serial bridge conversion scale and pressure thresholds still need calibration against the selected sensor and prototype.
 
 ## APIs and Routes
 
@@ -20,14 +22,16 @@ The application uses Next.js App Router pages and Server Actions. It does not cu
 
 | Route / action | Type | Behavior |
 |---|---|---|
-| `/` | `GET` page | Displays the default Next.js starter page. |
+| `/` | `GET` page | Redirects signed-in users to `/dashboard` and other visitors to `/login`. |
 | `/login` | `GET` page | Displays the login and signup form. |
-| `/dashboard` | `GET` page | Verifies the `session` cookie and reads the user's exercise sessions through Prisma. If the cookie is missing or invalid, the page renders with empty/default dashboard data rather than redirecting. |
+| `/dashboard` | `GET` page | Requires a valid `session` cookie and reads only that user's session history through Prisma. |
+| `/exercise` | `GET` page | Requires a valid `session` cookie and starts a live pressure capture session. |
 | `signup(formData)` | Server Action | Reads `name`, `email`, and `password`; checks for an existing email; hashes the password with bcryptjs (10 rounds); creates the user; and sets the session cookie. Returns `{ success: true }` or `{ error: string }`. |
 | `login(formData)` | Server Action | Reads `email` and `password`; verifies the password hash; and sets the session cookie on success. Returns `{ success: true }` or `{ error: string }`. |
 | `logout()` | Server Action | Deletes the `session` cookie. |
+| `saveExerciseSession(input)` | Server Action | Verifies the user session, validates measurements, and stores the completed session with its repetitions. User ID is taken from the verified cookie, never from client input. |
 
-The dashboard's server-side query is the only exercise-data read path. There are no implemented actions or endpoints to create, update, or delete sessions or repetitions. The dashboard links to `/exercise`, but that page does not currently exist.
+There is no conventional REST API under `app/api`; the browser submits completed session data through a Next.js Server Action.
 
 ## Schema Design
 
@@ -77,4 +81,4 @@ Prisma is the schema used by the project's `prisma db push` setup. Model fields 
 - One user can own many sessions; deleting a user deletes their sessions.
 - One session can contain many repetitions; deleting a session deletes its repetitions.
 - Email uniqueness is defined in Prisma. `schema.sql` also declares indexes on `exercise_sessions.user_id` and `repetitions.session_id`, but those indexes are not declared in `schema.prisma` and therefore are not part of the Prisma-managed schema as currently written.
-- The schema does not constrain level ranges, require `end_time` to follow `start_time`, or enforce that the repetition count matches the number of related repetition rows. A future session-write handler should validate these rules.
+- The session action validates timestamp ordering, pressure bounds, level range, hold duration, and repetition count before writing.

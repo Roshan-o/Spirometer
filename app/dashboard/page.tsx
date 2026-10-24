@@ -1,136 +1,85 @@
-import { cookies } from "next/headers";
-import { jwtVerify } from "jose";
+import { redirect } from "next/navigation";
 import prisma from "@/lib/db";
+import { getSessionUser } from "@/lib/auth";
 import DashboardClient from "./DashboardClient";
 
-const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret_for_development";
-const encoder = new TextEncoder();
-
-async function getUserFromCookie() {
-  try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("session")?.value;
-    if (!token) return null;
-    const { payload } = await jwtVerify(token, encoder.encode(JWT_SECRET));
-    return payload as { id: string; email: string; name: string };
-  } catch {
-    return null;
-  }
+function localDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export default async function DashboardPage() {
-  const user = await getUserFromCookie();
-  const userId = user?.id;
+  const user = await getSessionUser();
+  if (!user) redirect("/login");
 
-  // Fetch the last 14 sessions for chart
-  const sessions = userId
-    ? await prisma.exerciseSession.findMany({
-        where: { userId },
-        orderBy: { startTime: "asc" },
-        take: 14,
-      })
-    : [];
-
-  // Recent 4 sessions (latest first)
-  const recentSessions = userId
-    ? await prisma.exerciseSession.findMany({
-        where: { userId },
-        orderBy: { startTime: "desc" },
-        take: 4,
-      })
-    : [];
-
-  // Stats: compare last 7 days vs previous 7 days
+  const sessions = await prisma.exerciseSession.findMany({
+    where: { userId: user.id },
+    orderBy: { startTime: "desc" },
+  });
   const now = new Date();
-  const sevenDaysAgo = new Date(now);
-  sevenDaysAgo.setDate(now.getDate() - 7);
-  const fourteenDaysAgo = new Date(now);
-  fourteenDaysAgo.setDate(now.getDate() - 14);
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfWeek = new Date(startOfToday);
+  const daysSinceMonday = (startOfToday.getDay() + 6) % 7;
+  startOfWeek.setDate(startOfWeek.getDate() - daysSinceMonday);
+  const startOfChart = new Date(startOfWeek);
+  startOfChart.setDate(startOfChart.getDate() - 14);
+  const startOfTomorrow = new Date(startOfToday);
+  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
 
-  const thisWeekSessions = sessions.filter(
-    (s) => s.startTime >= sevenDaysAgo
-  );
-  const lastWeekSessions = sessions.filter(
-    (s) => s.startTime >= fourteenDaysAgo && s.startTime < sevenDaysAgo
-  );
+  const peakPressure = sessions.reduce((max, session) => Math.max(max, Number(session.maxPressureAchieved)), 0);
+  const maxHoldMs = sessions.reduce((max, session) => Math.max(max, session.maxLevelHoldDuration), 0);
+  const totalDurationSeconds = sessions.reduce((total, session) => total + session.durationSeconds, 0);
+  const totalRepetitions = sessions.reduce((total, session) => total + session.numberOfRepetitions, 0);
+  const sessionsThisWeek = sessions.filter((session) => session.startTime >= startOfWeek && session.startTime < startOfTomorrow).length;
 
-  const avgOrZero = (arr: number[]) =>
-    arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+  const dailyPeak = new Map<string, number>();
+  for (const session of sessions) {
+    const key = localDateKey(session.startTime);
+    dailyPeak.set(key, Math.max(dailyPeak.get(key) ?? 0, Number(session.maxPressureAchieved)));
+  }
+  const chartData = [...dailyPeak.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, pressure]) => ({
+      date: `${date}T12:00:00`,
+      day: new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+      pressure: Number(pressure.toFixed(2)),
+    }));
 
-  const thisWeekPressures = thisWeekSessions.map((s) =>
-    Number(s.maxPressureAchieved)
-  );
-  const lastWeekPressures = lastWeekSessions.map((s) =>
-    Number(s.maxPressureAchieved)
-  );
-
-  const thisWeekHolds = thisWeekSessions.map((s) => s.maxLevelHoldDuration);
-  const lastWeekHolds = lastWeekSessions.map((s) => s.maxLevelHoldDuration);
-
-  const currentMaxPressure = thisWeekPressures.length
-    ? Math.max(...thisWeekPressures)
-    : 0;
-  const lastMaxPressure = lastWeekPressures.length
-    ? Math.max(...lastWeekPressures)
-    : 0;
-
-  const avgHoldThis = avgOrZero(thisWeekHolds);
-  const avgHoldLast = avgOrZero(lastWeekHolds);
-
-  const pctChange = (curr: number, prev: number) => {
-    if (prev === 0) return 0;
-    return Math.round(((curr - prev) / prev) * 100);
-  };
-
-  // Consistency grid (last 14 days, 2 weeks)
-  const consistencyData = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - 13 + i);
-    d.setHours(0, 0, 0, 0);
-    const next = new Date(d);
-    next.setDate(next.getDate() + 1);
-    const daySessions = sessions.filter(
-      (s) => s.startTime >= d && s.startTime < next
-    );
-    if (daySessions.length === 0) return "missed";
-    if (daySessions[0].numberOfRepetitions >= 6) return "completed";
-    return "partial";
+  const dailyCounts = new Map<string, number>();
+  for (const session of sessions) {
+    const key = localDateKey(session.startTime);
+    dailyCounts.set(key, (dailyCounts.get(key) ?? 0) + 1);
+  }
+  const consistencyData = Array.from({ length: 14 }, (_, index) => {
+    const date = new Date(startOfChart);
+    date.setDate(startOfChart.getDate() + index);
+    const key = localDateKey(date);
+    return { date: key, count: dailyCounts.get(key) ?? 0 };
   });
 
-  // Chart data
-  const chartData = sessions.map((s, i) => ({
-    day: `Day ${i + 1}`,
-    pressure: Number(Number(s.maxPressureAchieved).toFixed(2)),
-  }));
-
-  const props = {
-    userName: user?.name || "User",
-    stats: {
-      peakPressure: currentMaxPressure.toFixed(2),
-      peakPressureChange: pctChange(currentMaxPressure, lastMaxPressure),
-      sustainDuration: (avgHoldThis / 1000).toFixed(2),
-      sustainChange: pctChange(avgHoldThis, avgHoldLast),
-      sessionsThisWeek: thisWeekSessions.length,
-      sessionsLastWeek: lastWeekSessions.length,
-    },
-    recentSessions: recentSessions.map((s) => ({
-      date: s.startTime.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
-      time: s.startTime.toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-      }),
-      duration: `${Math.floor(s.durationSeconds / 60)}:${String(
-        s.durationSeconds % 60
-      ).padStart(2, "0")} min`,
-      pressure: `${Number(s.maxPressureAchieved).toFixed(2)} kPa`,
-    })),
-    chartData,
-    consistencyData,
-  };
-
-  return <DashboardClient {...props} />;
+  return (
+    <DashboardClient
+      userName={user.name}
+      stats={{
+        peakPressure: sessions.length ? peakPressure.toFixed(2) : "—",
+        maxHoldSeconds: sessions.length ? (maxHoldMs / 1000).toFixed(1) : "—",
+        averageDuration: sessions.length ? String(Math.round(totalDurationSeconds / sessions.length)) : "—",
+        sessionsThisWeek,
+        totalRepetitions,
+      }}
+      sessions={sessions.map((session) => ({
+        id: session.id,
+        date: session.startTime.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
+        time: session.startTime.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }),
+        duration: String(session.durationSeconds),
+        pressure: Number(session.maxPressureAchieved).toFixed(2),
+        maxHoldSeconds: (session.maxLevelHoldDuration / 1000).toFixed(1),
+        repetitions: session.numberOfRepetitions,
+      }))}
+      chartData={chartData}
+      consistencyData={consistencyData}
+    />
+  );
 }

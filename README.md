@@ -8,8 +8,8 @@ A sensor-based smart incentive spirometer web app built with Next.js and Neon DB
 
 ## Prerequisites
 
-- Node.js v18+
-- Google Chrome (required for Web Serial API)
+- Node.js v20+
+- A browser that supports WebSockets
 - A [Neon](https://neon.tech) PostgreSQL database
 
 ---
@@ -37,21 +37,20 @@ npx prisma generate --schema=prisma/schema.prisma
 npx prisma db push --schema=prisma/schema.prisma
 ```
 
-### 4. Seed with demo data (optional)
-```bash
-npx ts-node --project tsconfig.seed.json prisma/seed.ts
-```
-
-Demo login credentials after seeding:
-- **Email:** `deepak@example.com`
-- **Password:** `password123`
-
-### 5. Start the development server
+### 4. Start the development server
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in Chrome.
+Open [http://localhost:3000](http://localhost:3000) and create an account. The app does not seed demo accounts or session records. The dashboard starts empty and shows measurements from sessions completed with a connected pressure sensor.
+
+Start the serial bridge in a second terminal before opening a breathing session:
+
+```bash
+npm run bridge -- --port COM7 --baud 9600 --scale 50000
+```
+
+Change the serial port, baud rate, and scale to match the connected board and calibrated sensor. The browser connects to `ws://localhost:8765` by default; set `NEXT_PUBLIC_SENSOR_WS_URL` to override it. If the bridge or sensor is unavailable, the session stays in a connecting/disconnected state and no simulated readings are generated.
 
 ---
 
@@ -61,4 +60,4 @@ Open [http://localhost:3000](http://localhost:3000) in Chrome.
 |---|---|
 | `npm run dev` | Start development server |
 | `npm run build` | Build for production |
-| `npm run seed` | Seed the database with dummy data |
+| `npm run bridge` | Read pressure samples from the connected serial device and broadcast them to the browser |
