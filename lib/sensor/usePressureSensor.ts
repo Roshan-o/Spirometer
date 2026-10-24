@@ -5,6 +5,7 @@ import { SensorSource, SensorStatus, WebSocketSource } from "./sources";
 
 export function usePressureSensor() {
   const [pressure, setPressure] = useState(0);
+  const pressureRef = useRef(0);
   const [status, setStatus] = useState<SensorStatus>("connecting");
   const adapter = useRef<SensorSource | null>(null);
   const generation = useRef(0);
@@ -13,6 +14,7 @@ export function usePressureSensor() {
     generation.current++;
     adapter.current?.stop();
     adapter.current = null;
+    pressureRef.current = 0;
     setStatus("disconnected");
   }, []);
 
@@ -21,13 +23,15 @@ export function usePressureSensor() {
     const id = generation.current;
     const source = new WebSocketSource();
     adapter.current = source;
+    pressureRef.current = 0;
     setPressure(0);
     setStatus("connecting");
     try {
       await source.start((sample) => {
         if (generation.current !== id) return;
         const bounded = Math.max(-5, Math.min(5, sample));
-        setPressure((previous) => previous + 0.35 * (bounded - previous));
+        pressureRef.current = pressureRef.current + 0.35 * (bounded - pressureRef.current);
+        setPressure(pressureRef.current);
       }, (nextStatus) => {
         if (generation.current === id) setStatus(nextStatus);
       });
@@ -41,5 +45,5 @@ export function usePressureSensor() {
     return () => { void startup; disconnect(); };
   }, [connect, disconnect]);
 
-  return { pressure, status, connect, disconnect };
+  return { pressure, pressureRef, status, connect, disconnect };
 }

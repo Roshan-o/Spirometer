@@ -49,7 +49,7 @@ function SpirometerCard({ pressure, tubeRefs, ballRefs, levels }: { pressure:num
   const fills = ["#9CD3F7", "#B7EAC3", "#FDDC8A"];
   const top = pressure;
   return <section className="relative h-[593px] overflow-hidden rounded-[24px] bg-gradient-to-br from-[#F2F8FC] to-[#E6F0EA] p-6 shadow-[0_4px_16px_rgba(30,80,140,.08)] max-lg:h-auto max-lg:min-h-[590px]">
-    <h2 className="text-[17px] font-bold text-[#0F2A43]">Digital 3-Ball Spirometer</h2><p className="mt-0.5 text-[12px] text-[#6B7C8F]">Exhale to raise balls · Inhale to pull them down. Hold in the green zone.</p>
+    <h2 className="text-[17px] font-bold text-[#0F2A43]">Digital 3-Ball Spirometer</h2><p className="mt-0.5 text-[12px] text-[#6B7C8F]">Inhale deeply to raise the balls · Hold in the target zone.</p>
     <div className="absolute left-[10px] top-[148px] flex h-[310px] flex-col justify-between text-[11px] text-[#6B7C8F]"><span>High</span><span>Medium</span><span>Low</span></div>
     <div className="absolute left-[70px] right-7 top-[165px] border-t border-dashed border-[#86a5bc]"/><div className="absolute left-[70px] right-7 top-[256px] border-t border-dashed border-[#86a5bc]"/><div className="absolute left-[70px] right-7 top-[347px] border-t border-dashed border-[#86a5bc]"/>
     <div className="absolute left-[72px] top-[155px] rounded bg-[#2ea75c] px-2 py-1 text-[10px] font-medium text-white">Target Zone</div><div className="absolute left-[131px] top-[165px] h-[90px] border-l border-dotted border-[#2eb84b]"/><div className="absolute left-[131px] top-[165px] w-3 border-t border-[#2eb84b]"/><div className="absolute left-[131px] top-[255px] w-3 border-b border-[#2eb84b]"/>
@@ -85,7 +85,7 @@ export default function ExerciseClient({ userName, config }: { userName: string;
   const c = config || { easy: 1, medium: 2, hard: 3, target_peak: 3, target_exhale_hold: 8, target_inhale_hold: 5 };
   const levels = useMemo(() => [c.easy, c.medium, c.hard] as number[], [c.easy, c.medium, c.hard]);
   const router = useRouter();
-  const { pressure, status: sensorStatus, connect, disconnect } = usePressureSensor();
+  const { pressure, pressureRef: sensorPressureRef, status: sensorStatus, connect, disconnect } = usePressureSensor();
   const [step, setStep] = useState(0);
   const [state, setState] = useState<State>("running");
   const [elapsed, setElapsed] = useState(0);
@@ -152,6 +152,8 @@ export default function ExerciseClient({ userName, config }: { userName: string;
     repetitionsRef.current = [];
     currentRepRef.current = null;
     startedAtRef.current = new Date();
+    if (sensorPressureRef) sensorPressureRef.current = 0;
+    pressureRef.current = 0;
     setElapsed(0);
     setPeak(0);
     setMaxHold(0);
@@ -171,7 +173,8 @@ export default function ExerciseClient({ userName, config }: { userName: string;
       const dt = Math.min((now - previous) / 1000, 0.1);
       previous = now;
       elapsedRef.current += dt;
-      const p = Math.max(0, pressureRef.current);
+      const raw = sensorPressureRef ? sensorPressureRef.current : pressureRef.current;
+      const p = Math.abs(raw);
       if (p >= 0.5) {
         const level = levels.filter((threshold) => p >= threshold).length;
         let rep = currentRepRef.current;
@@ -200,9 +203,10 @@ export default function ExerciseClient({ userName, config }: { userName: string;
         const ball = ballRefs.current[index];
         if (!ball) return;
         const height = ball.parentElement?.getBoundingClientRect().height || 368;
-        const radius = ball.offsetHeight / 2;
+        const radius = (ball.offsetHeight || 60) / 2;
         const center = radius + 10 + (height - radius * 2 - 20) * (1 - ratio);
-        const currentY = Number(ball.dataset.y || center);
+        const defaultBottom = height - radius - 10;
+        const currentY = Number(ball.dataset.y || defaultBottom);
         const nextY = currentY + (center - currentY) * speed;
         ball.dataset.y = String(nextY);
         ball.style.transform = `translate(-50%, ${nextY - radius}px)`;

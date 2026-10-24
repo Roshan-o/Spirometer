@@ -29,7 +29,7 @@ interface Props {
   };
   sessions: SessionRow[];
   chartData: ChartPoint[];
-  consistencyData: { date: string; count: number }[];
+  consistencyData: { date: string; count: number; isToday?: boolean }[];
 }
 
 const chartRanges = ["Week", "Month", "All Time"] as const;
@@ -114,7 +114,7 @@ export default function DashboardClient({ userName, stats, sessions, chartData, 
 
           <article className="rounded-xl border border-[#e9eef6] bg-white p-4 shadow-[0_2px_8px_rgba(36,75,125,.04)]">
             <h2 className="text-[13px] font-bold">Consistency <span className="text-[#4385ed]">ⓘ</span></h2><p className="mb-3 text-[10px] text-[#8b98aa]">Sessions completed per day</p>
-            <div className="space-y-3"><div className="flex items-center gap-2"><span className="w-12 shrink-0"/><div className="grid flex-1 grid-cols-7 text-center">{weekdays.map((day) => <span key={day} className="text-[8px] text-[#8b98aa]">{day}</span>)}</div></div>{weeks.map((week, weekIndex) => <div key={weekIndex} className="flex items-center gap-2"><span className="w-12 shrink-0 text-[9px] text-[#7a899e]">Week {weekIndex + 1}</span><div className="grid flex-1 grid-cols-7 text-center">{week.map((day) => <span key={day.date} title={`${day.date}: ${day.count} session${day.count === 1 ? "" : "s"}`} className={`mx-auto h-3 w-3 rounded-full ${day.count === 0 ? "bg-[#e8edf4]" : day.count === 1 ? "bg-[#b7e8d0]" : "bg-[#27b978]"}`}/>)}</div></div>)}</div>
+            <div className="space-y-3"><div className="flex items-center gap-2"><span className="w-12 shrink-0"/><div className="grid flex-1 grid-cols-7 text-center">{weekdays.map((day) => <span key={day} className="text-[8px] text-[#8b98aa]">{day}</span>)}</div></div>{weeks.map((week, weekIndex) => <div key={weekIndex} className="flex items-center gap-2"><span className="w-12 shrink-0 text-[9px] text-[#7a899e]">Week {weekIndex + 1}</span><div className="grid flex-1 grid-cols-7 text-center">{week.map((day) => <span key={day.date} title={`${day.date}${day.isToday ? " (Today)" : ""}: ${day.count} session${day.count === 1 ? "" : "s"}`} className={`mx-auto h-3 w-3 rounded-full transition-transform hover:scale-125 ${day.count === 0 ? "bg-[#e8edf4]" : day.count === 1 ? "bg-[#b7e8d0]" : "bg-[#27b978]"} ${day.isToday ? "ring-2 ring-[#1763df]/35 ring-offset-1" : ""}`}/>)}</div></div>)}</div>
             <div className="mt-5 flex flex-wrap gap-x-3 gap-y-1 text-[9px] text-[#78869a]"><span className="flex items-center gap-1"><i className="h-1.5 w-1.5 rounded-full bg-[#27b978]"/>2+ sessions</span><span className="flex items-center gap-1"><i className="h-1.5 w-1.5 rounded-full bg-[#b7e8d0]"/>1 session</span><span className="flex items-center gap-1"><i className="h-1.5 w-1.5 rounded-full bg-[#e8edf4]"/>No session</span></div>
           </article>
         </section>

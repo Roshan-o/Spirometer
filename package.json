@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "bridge": "npx tsc --project tsconfig.bridge.json && node .bridge-out/bridge/bridge.js"
+    "bridge": "npx tsc --project tsconfig.bridge.json && node .bridge-out/bridge.js"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

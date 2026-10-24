@@ -23,8 +23,8 @@ export default async function DashboardPage() {
   const startOfWeek = new Date(startOfToday);
   const daysSinceMonday = (startOfToday.getDay() + 6) % 7;
   startOfWeek.setDate(startOfWeek.getDate() - daysSinceMonday);
-  const startOfChart = new Date(startOfWeek);
-  startOfChart.setDate(startOfChart.getDate() - 14);
+  const startOfTwoWeeks = new Date(startOfWeek);
+  startOfTwoWeeks.setDate(startOfTwoWeeks.getDate() - 7);
   const startOfTomorrow = new Date(startOfToday);
   startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
 
@@ -53,10 +53,10 @@ export default async function DashboardPage() {
     dailyCounts.set(key, (dailyCounts.get(key) ?? 0) + 1);
   }
   const consistencyData = Array.from({ length: 14 }, (_, index) => {
-    const date = new Date(startOfChart);
-    date.setDate(startOfChart.getDate() + index);
+    const date = new Date(startOfTwoWeeks);
+    date.setDate(startOfTwoWeeks.getDate() + index);
     const key = localDateKey(date);
-    return { date: key, count: dailyCounts.get(key) ?? 0 };
+    return { date: key, count: dailyCounts.get(key) ?? 0, isToday: key === localDateKey(now) };
   });
 
   return (
