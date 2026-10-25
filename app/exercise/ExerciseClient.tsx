@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock3, LayoutDashboard, LogOut, Pause, Play, RefreshCw, StopCircle, Volume2, VolumeX, Wind } from "lucide-react";
 import { logout } from "../actions/auth";
 import { usePressureSensor } from "@/lib/sensor/usePressureSensor";
-import { DEFAULT_SA_HZ, SwaraGlider, swaraAt, type SwaraPoint } from "@/lib/audio/swaraGlider";
+import { DEFAULT_SA_HZ, SwaraGlider } from "@/lib/audio/swaraGlider";
 import { saveExerciseSession, type CompletedRepetition } from "../actions/sessions";
 
 const guides = [
@@ -24,24 +24,7 @@ type ExerciseConfig = {
   target_inhale_hold: number;
   sa_frequency?: number;
 };
-// TEMP: sound test mode. Forces the sensor to "connected" and drives the balls from a
-// manual pressure slider. Set to false (or delete every SOUND_TEST block) once verified.
-const SOUND_TEST = true;
 const BALL_COLORS = ["#1E73E8", "#2EB84B", "#F59E0B"];
-
-// TEMP: manual pressure slider for testing the swara sound without the Arduino.
-function SoundTestSlider({ value, max, levels, swara, onChange }: { value:number; max:number; levels:number[]; swara:SwaraPoint|null; onChange:(v:number)=>void }) {
-  return <section className="mt-3 shrink-0 rounded-[16px] border border-dashed border-[#f0b45a] bg-[#FFF8EC] px-4 py-3">
-    <div className="flex flex-wrap items-center justify-between gap-2 text-[12px]">
-      <b className="text-[#9a5b00]">Sound test (temporary): sensor simulated</b>
-      <span className="tabular-nums text-[#0F2A43]">{value.toFixed(2)} kPa · {swara ? `${swara.label} ${swara.freq.toFixed(1)} Hz` : "silent"}</span>
-    </div>
-    <input type="range" min={0} max={max} step={0.01} value={value} onChange={(e)=>onChange(Number(e.target.value))} aria-label="Test pressure in kPa" className="mt-2 w-full accent-[#1E6FE0]"/>
-    <div className="relative h-4 text-[10px] text-[#6B7C8F]">
-      {[0, ...levels].map((kpa, i) => <span key={i} className={`absolute whitespace-nowrap ${i ? "-translate-x-1/2" : ""}`} style={{left:`${kpa / max * 100}%`, color: i ? BALL_COLORS[i-1] : undefined}}>{["Noise", "Ga", "Pa", "Sa'"][i]}</span>)}
-    </div>
-  </section>;
-}
 
 function Sidebar() {
   const router = useRouter();
@@ -104,11 +87,24 @@ function MetricCard({ title, value, target, percent, tone, icon }: {title:string
   return <section className="h-full min-h-0 rounded-[20px] bg-white px-4 py-3 shadow-[0_4px_16px_rgba(30,80,140,.08)]"><div className="flex items-center gap-3"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${icon==='wind'?'bg-[#e6f2fc] text-[#4c95cf]':'bg-[#e4f7ee] text-[#29a77c]'}`}>{icon==='wind'?<Wind size={18}/>:<Clock3 size={18}/>}</span><div className="min-w-0"><p className="text-[11px] text-[#6B7C8F]">{title}</p><p className="tabular-nums text-[20px] font-bold leading-6 text-[#0F2A43]">{value}</p></div></div>{showTarget && <><div className="mt-2 h-2 overflow-hidden rounded-full bg-[#E3ECF5]"><div className={`h-full rounded-full ${tone==='green'?'bg-[#2EB84B]':'bg-[#1E8BE0]'}`} style={{width:`${Math.min(100,percent)}%`}}/></div><p className="mt-1 text-[10px] text-[#758494]">Target: {target}</p></>}</section>;
 }
 
-function SessionControlBar({ state, elapsed, toggle, start, restart, end, canRetry, saving, soundOn, audioReady, toggleSound }: {state:State;elapsed:number;toggle:()=>void;start:()=>void;restart:()=>void;end:()=>void;canRetry:boolean;saving:boolean;soundOn:boolean;audioReady:boolean;toggleSound:()=>void}) {
+function SessionControlBar({ state, elapsed, toggle, start, sensorConnected, restart, end, canRetry, saving, soundOn, audioReady, toggleSound }: {state:State;elapsed:number;toggle:()=>void;start:()=>void;sensorConnected:boolean;restart:()=>void;end:()=>void;canRetry:boolean;saving:boolean;soundOn:boolean;audioReady:boolean;toggleSound:()=>void}) {
   const soundLabel = !audioReady ? 'Enable Sound' : soundOn ? 'Mute Sound' : 'Unmute Sound';
   const idle = state === 'idle';
+  // Touch screens have no hover, so a tap on the locked Start button shows the hint for a moment.
+  const [hintVisible, setHintVisible] = useState(false);
+  const hintTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const flashHint = () => {
+    setHintVisible(true);
+    clearTimeout(hintTimer.current);
+    hintTimer.current = setTimeout(() => setHintVisible(false), 2500);
+  };
+  useEffect(() => () => clearTimeout(hintTimer.current), []);
   return <section className="flex min-h-[76px] shrink-0 flex-wrap items-center gap-3 rounded-[20px] bg-white px-5 py-3 shadow-[0_4px_16px_rgba(30,80,140,.08)] max-sm:gap-2 max-sm:px-3"><button onClick={toggle} disabled={idle||state==='ended'} className="flex h-10 shrink-0 items-center gap-2 rounded-full bg-[#E8EFF7] px-4 text-[12px] font-medium text-[#0F2A43] disabled:opacity-50 max-sm:px-3">{state==='running'?<Pause size={14}/>:<Play size={14}/>} {state==='paused'?'Resume':'Pause'}</button>{idle
-    ? <button onClick={start} className="flex h-[46px] min-w-[160px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-[#2EB84B] px-5 text-[13px] font-semibold text-white shadow-[0_5px_12px_rgba(46,184,75,.28)] max-sm:order-first max-sm:min-w-0 max-sm:basis-full max-sm:px-3"><Play size={15}/>Start Session</button>
+    ? <span className="group relative shrink-0 max-sm:order-first max-sm:basis-full">
+        {/* aria-disabled (not disabled) keeps hover/focus working so the hint can show. */}
+        <button onClick={sensorConnected ? start : flashHint} aria-disabled={!sensorConnected} aria-describedby={sensorConnected ? undefined : 'start-hint'} className={`flex h-[46px] w-full min-w-[160px] items-center justify-center gap-2 whitespace-nowrap rounded-full bg-[#2EB84B] px-5 text-[13px] font-semibold text-white max-sm:min-w-0 max-sm:px-3 ${sensorConnected ? 'shadow-[0_5px_12px_rgba(46,184,75,.28)]' : 'cursor-not-allowed opacity-50'}`}><Play size={15}/>Start Session</button>
+        {!sensorConnected && <span id="start-hint" role="tooltip" className={`pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-[#0F2A43] px-3 py-1.5 text-[11px] font-medium text-white shadow-md group-focus-within:block [.group:hover_&]:block ${hintVisible ? '!block' : ''}`}>Please connect the hardware device</span>}
+      </span>
     : <button onClick={end} disabled={state==='ended'&&!canRetry||saving} className="flex h-[46px] min-w-[160px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-[#E53935] px-5 text-[13px] font-semibold text-white shadow-[0_5px_12px_rgba(229,57,53,.28)] disabled:opacity-50 max-sm:order-first max-sm:min-w-0 max-sm:basis-full max-sm:px-3"><StopCircle size={15}/>{saving?'Saving…':canRetry?'Retry Save':state==='ended'?'Session Saved':'End Session'}</button>}<button onClick={restart} disabled={idle} className="flex h-10 shrink-0 items-center gap-2 rounded-full bg-[#E8EFF7] px-4 text-[12px] font-medium text-[#0F2A43] disabled:opacity-50 max-sm:px-3"><RefreshCw size={14}/><span className="max-sm:hidden">Restart</span></button><button data-sound-toggle onClick={toggleSound} aria-label={soundLabel} className={`flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-[12px] font-medium max-sm:px-3 ${audioReady && soundOn ? 'bg-[#DCEBFA] text-[#1E6FE0]' : 'bg-[#E8EFF7] text-[#0F2A43]'}`}>{audioReady && soundOn?<Volume2 size={14}/>:<VolumeX size={14}/>}<span className="max-sm:hidden">{soundLabel}</span></button><div className="mx-1 h-10 border-l border-[#e5ebf1] max-md:hidden"/><div className="ml-auto flex min-w-[145px] shrink-0 items-center gap-3 rounded-lg border border-[#edf1f5] px-4 py-2 text-[#0F2A43] max-sm:min-w-0 max-sm:px-2"><Clock3 size={18}/><div><p className="text-[10px] text-[#6B7C8F]">Session Time</p><p className="tabular-nums text-[12px] font-bold">{formatTime(elapsed)}</p></div></div></section>;
 }
 
@@ -120,11 +116,7 @@ export default function ExerciseClient({ userName, config }: { userName: string;
   const c = config || { easy: 1, medium: 2, hard: 3, target_peak: 3, target_exhale_hold: 8, target_inhale_hold: 5 };
   const levels = useMemo(() => [c.easy, c.medium, c.hard] as number[], [c.easy, c.medium, c.hard]);
   const router = useRouter();
-  const { pressure, pressureRef: sensorPressureRef, status: realSensorStatus, connect, disconnect } = usePressureSensor();
-  // TEMP: sound test overrides (see SOUND_TEST).
-  const sensorStatus = SOUND_TEST ? "connected" : realSensorStatus;
-  const [testPressure, setTestPressure] = useState(0);
-  const testPressureRef = useRef(0);
+  const { pressure, pressureRef: sensorPressureRef, status: sensorStatus, connect, disconnect } = usePressureSensor();
   const [step, setStep] = useState(0);
   // The session waits for "Start Session"; the sensor still connects meanwhile so its status shows.
   const [state, setState] = useState<State>("idle");
@@ -150,7 +142,6 @@ export default function ExerciseClient({ userName, config }: { userName: string;
   const gliderRef = useRef<SwaraGlider | null>(null);
   const [soundOn, setSoundOn] = useState(true);
   const [audioReady, setAudioReady] = useState(false);
-  const [swara, setSwara] = useState<SwaraPoint | null>(null);
 
   // Browsers block audio until the user interacts, so unlock it on the first tap or key press.
   useEffect(() => {
@@ -221,6 +212,7 @@ export default function ExerciseClient({ userName, config }: { userName: string;
 
   const toggle = () => setState((current) => current === "running" ? "paused" : current === "paused" ? "running" : "ended");
   const start = () => {
+    if (sensorStatus !== "connected") return;
     resetSession();
     setState("running");
   };
@@ -240,7 +232,6 @@ export default function ExerciseClient({ userName, config }: { userName: string;
       if (!ball) return;
       ball.style.transform = "translate(-50%, 0px)";
     });
-    setSwara(null);
     startedAtRef.current = new Date();
     if (sensorPressureRef) sensorPressureRef.current = 0;
     pressureRef.current = 0;
@@ -261,7 +252,7 @@ export default function ExerciseClient({ userName, config }: { userName: string;
       const dt = Math.min((now - previous) / 1000, 0.1);
       previous = now;
       elapsedRef.current += dt;
-      const raw = SOUND_TEST ? testPressureRef.current : sensorPressureRef ? sensorPressureRef.current : pressureRef.current;
+      const raw = sensorPressureRef ? sensorPressureRef.current : pressureRef.current;
       const p = Math.abs(raw);
       if (p >= 0.5) {
         const level = levels.filter((threshold) => p >= threshold).length;
@@ -307,11 +298,9 @@ export default function ExerciseClient({ userName, config }: { userName: string;
 
       // Sound follows the balls' position; silent while they rest at the bottom.
       const lifted = position > 0.02;
-      const point = swaraAt(position, sa);
       gliderRef.current?.update(position, lifted && !document.hidden);
 
       if (now - lastUi > 100) {
-        setSwara(lifted ? point : null);
         lastUi = now;
         setElapsed(elapsedRef.current);
         setDisplayPressure(p);
@@ -325,16 +314,14 @@ export default function ExerciseClient({ userName, config }: { userName: string;
     return () => {
       cancelAnimationFrame(frame);
       gliderRef.current?.silence();
-      setSwara(null);
     };
-  }, [state, levels, sensorStatus, sa]);
+  }, [state, levels, sensorStatus]);
 
   useEffect(() => () => disconnect(), [disconnect]);
 
   return <div className="flex min-h-dvh bg-[#F4F8FC] font-sans text-[#0F2A43] fit:h-dvh fit:overflow-hidden"><Sidebar/><main className="flex min-w-0 flex-1 flex-col px-[25px] py-3 max-md:px-4 fit:h-dvh"><MobileNav/><PageHeader status={sensorStatus} userName={userName}/>
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] fit:min-h-0 fit:flex-1"><SpirometerCard pressure={displayPressure} tubeRefs={tubeRefs} ballRefs={ballRefs} levels={levels}/><div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 fit:min-h-0 fit:grid-rows-[1.65fr_1fr_1fr_0.8fr]"><BreathingGuideCard step={step} change={setStep}/><MetricCard title="Peak Pressure" value={`${peak.toFixed(2)} kPa`} target={`${c.target_peak.toFixed(1)} kPa`} percent={peak/c.target_peak*100} tone="green" icon="wind"/><MetricCard title="Longest Hold" value={`${maxHold.toFixed(1)} s`} target={`${c.target_exhale_hold.toFixed(1)} s`} percent={maxHold/c.target_exhale_hold*100} tone="blue" icon="clock"/><MetricCard title="Repetitions" value={String(repetitionCount)} target="Session total" percent={0} tone="green" icon="clock"/></div></div>
     {saveError && <p role="alert" className="fixed bottom-24 left-1/2 z-50 max-w-[min(90vw,32rem)] -translate-x-1/2 rounded-lg bg-red-50 p-3 text-sm text-red-700 shadow-md">{saveError}</p>}
-    {SOUND_TEST && <SoundTestSlider value={testPressure} max={levels[2] + 0.5} levels={levels} swara={swara} onChange={(v)=>{testPressureRef.current=v;setTestPressure(v);}}/>}
-    <div className="mt-3 shrink-0"><SessionControlBar state={state} elapsed={elapsed} toggle={toggle} start={start} restart={restart} end={finish} canRetry={!!saveError} saving={saving} soundOn={soundOn} audioReady={audioReady} toggleSound={toggleSound}/></div>
+    <div className="mt-3 shrink-0"><SessionControlBar state={state} elapsed={elapsed} toggle={toggle} start={start} sensorConnected={sensorStatus === "connected"} restart={restart} end={finish} canRetry={!!saveError} saving={saving} soundOn={soundOn} audioReady={audioReady} toggleSound={toggleSound}/></div>
   </main></div>;
 }
