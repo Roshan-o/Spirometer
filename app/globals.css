@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Lock a page to one screen only when the viewport is large enough to hold it
+   (including at browser zoom, which shrinks the viewport in CSS pixels). */
+@custom-variant fit (@media (min-width: 64rem) and (min-height: 760px));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
