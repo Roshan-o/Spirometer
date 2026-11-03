@@ -8,6 +8,6 @@ target_peak: 3.0
 target_exhale_hold: 8.0
 target_inhale_hold: 5.0
 
-# Tonic (Sa) for the breath sound, in Hz. 196 = G3, the Gamaka Slider's default.
+# Tonic (Sa) for the breath sound and its drone, in Hz. 256 = textbook Sa, so Ga = 320, Pa = 384, high Sa = 512.
 # Blue ball: noise → Ga, green ball: Ga → Pa, orange ball: Pa → high Sa.
-sa_frequency: 196
+sa_frequency: 256

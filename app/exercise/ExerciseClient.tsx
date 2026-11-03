@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock3, LayoutDashboard, LogOut, Pause, Play, RefreshCw, StopCircle, Volume2, VolumeX, Wind } from "lucide-react";
 import { logout } from "../actions/auth";
 import { usePressureSensor } from "@/lib/sensor/usePressureSensor";
-import { DEFAULT_SA_HZ, SwaraGlider } from "@/lib/audio/swaraGlider";
+import { DEFAULT_SA_HZ, SwaraGlider, swaraAt } from "@/lib/audio/swaraGlider";
 import { saveExerciseSession, type CompletedRepetition } from "../actions/sessions";
 
 const guides = [
@@ -25,6 +25,39 @@ type ExerciseConfig = {
   sa_frequency?: number;
 };
 const BALL_COLORS = ["#1E73E8", "#2EB84B", "#F59E0B"];
+
+// TEMP: sound test mode. Pretends the sensor is connected and drives the balls and sound
+// from a manual pressure slider. To remove: delete every block marked TEMP (and `swaraAt` from the import).
+const SOUND_TEST = true;
+
+// TEMP: what the sound settles to at a given test pressure.
+function soundTestReadout(kpa: number, levels: number[], sa: number) {
+  const position = levels.reduce((sum, threshold, i) => {
+    const floor = i ? levels[i - 1] : 0;
+    return sum + Math.max(0, Math.min(1, (kpa - floor) / (threshold - floor)));
+  }, 0);
+  if (position <= 0.02) return "silent";
+  const { freq, noise } = swaraAt(position, sa);
+  if (noise > 0) return `Noise → Ga · ${Math.round(noise * 100)}% noise`;
+  // Positions 1, 2 and 3 are exactly Ga, Pa and high Sa.
+  const exact = [1, 2, 3].findIndex((n) => Math.abs(swaraAt(n, sa).freq - freq) < 0.01);
+  if (exact >= 0) return `${["Ga", "Pa", "Sa'"][exact]} (exact) · ${freq.toFixed(1)} Hz`;
+  return `${position < 2 ? "Ga → Pa" : "Pa → Sa'"} · ${freq.toFixed(1)} Hz`;
+}
+
+// TEMP: manual pressure slider for testing the swara sound without the Arduino.
+function SoundTestSlider({ value, max, levels, sa, running, onChange }: { value:number; max:number; levels:number[]; sa:number; running:boolean; onChange:(v:number)=>void }) {
+  return <section className="mt-3 shrink-0 rounded-[16px] border border-dashed border-[#f0b45a] bg-[#FFF8EC] px-4 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-2 text-[12px]">
+      <b className="text-[#9a5b00]">Sound test (temporary): sensor simulated{running ? "" : " · press Start Session to hear it"}</b>
+      <span className="tabular-nums text-[#0F2A43]">{value.toFixed(2)} kPa · {soundTestReadout(value, levels, sa)}</span>
+    </div>
+    <input type="range" min={0} max={max} step={0.01} value={value} onChange={(e)=>onChange(Number(e.target.value))} aria-label="Test pressure in kPa" className="mt-2 w-full accent-[#1E6FE0]"/>
+    <div className="relative h-4 text-[10px] text-[#6B7C8F]">
+      {[0, ...levels].map((kpa, i) => <span key={i} className={`absolute whitespace-nowrap ${i ? "-translate-x-1/2" : ""}`} style={{left:`${kpa / max * 100}%`, color: i ? BALL_COLORS[i-1] : undefined}}>{["Noise", "Ga", "Pa", "Sa'"][i]}</span>)}
+    </div>
+  </section>;
+}
 
 function Sidebar() {
   const router = useRouter();
@@ -116,7 +149,11 @@ export default function ExerciseClient({ userName, config }: { userName: string;
   const c = config || { easy: 1, medium: 2, hard: 3, target_peak: 3, target_exhale_hold: 8, target_inhale_hold: 5 };
   const levels = useMemo(() => [c.easy, c.medium, c.hard] as number[], [c.easy, c.medium, c.hard]);
   const router = useRouter();
-  const { pressure, pressureRef: sensorPressureRef, status: sensorStatus, connect, disconnect } = usePressureSensor();
+  const { pressure, pressureRef: sensorPressureRef, status: realSensorStatus, connect, disconnect } = usePressureSensor();
+  // TEMP: sound test overrides (see SOUND_TEST).
+  const sensorStatus = SOUND_TEST ? "connected" : realSensorStatus;
+  const [testPressure, setTestPressure] = useState(0);
+  const testPressureRef = useRef(0);
   const [step, setStep] = useState(0);
   // The session waits for "Start Session"; the sensor still connects meanwhile so its status shows.
   const [state, setState] = useState<State>("idle");
@@ -252,7 +289,8 @@ export default function ExerciseClient({ userName, config }: { userName: string;
       const dt = Math.min((now - previous) / 1000, 0.1);
       previous = now;
       elapsedRef.current += dt;
-      const raw = sensorPressureRef ? sensorPressureRef.current : pressureRef.current;
+      // TEMP: SOUND_TEST reads the slider instead of the sensor.
+      const raw = SOUND_TEST ? testPressureRef.current : sensorPressureRef ? sensorPressureRef.current : pressureRef.current;
       const p = Math.abs(raw);
       if (p >= 0.5) {
         const level = levels.filter((threshold) => p >= threshold).length;
@@ -276,15 +314,12 @@ export default function ExerciseClient({ userName, config }: { userName: string;
 
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       const speed = reducedMotion ? 1 : 0.2;
-      // Each ball glides toward its target height; the three heights stack into one
-      // 0–3 position that drives the sound (see lib/audio/swaraGlider.ts).
-      let position = 0;
+      // Each ball glides toward its target height.
       levels.forEach((threshold, index) => {
         const floor = index === 0 ? 0 : levels[index - 1];
         const target = Math.max(0, Math.min(1, (p - floor) / (threshold - floor)));
         ballRatiosRef.current[index] += (target - ballRatiosRef.current[index]) * speed;
         const ratio = ballRatiosRef.current[index];
-        position += ratio;
         const ball = ballRefs.current[index];
         if (!ball) return;
         const height = ball.parentElement?.getBoundingClientRect().height || 368;
@@ -296,9 +331,8 @@ export default function ExerciseClient({ userName, config }: { userName: string;
         ball.style.transform = `translate(-50%, ${center - restingCenter}px)`;
       });
 
-      // Sound follows the balls' position; silent while they rest at the bottom.
-      const lifted = position > 0.02;
-      gliderRef.current?.update(position, lifted && !document.hidden);
+      // Sound follows the balls: noise → Ga, Ga → Pa, Pa → high Sa (see lib/audio/swaraGlider.ts).
+      gliderRef.current?.update(ballRatiosRef.current, !document.hidden);
 
       if (now - lastUi > 100) {
         lastUi = now;
@@ -322,6 +356,8 @@ export default function ExerciseClient({ userName, config }: { userName: string;
   return <div className="flex min-h-dvh bg-[#F4F8FC] font-sans text-[#0F2A43] fit:h-dvh fit:overflow-hidden"><Sidebar/><main className="flex min-w-0 flex-1 flex-col px-[25px] py-3 max-md:px-4 fit:h-dvh"><MobileNav/><PageHeader status={sensorStatus} userName={userName}/>
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] fit:min-h-0 fit:flex-1"><SpirometerCard pressure={displayPressure} tubeRefs={tubeRefs} ballRefs={ballRefs} levels={levels}/><div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 fit:min-h-0 fit:grid-rows-[1.65fr_1fr_1fr_0.8fr]"><BreathingGuideCard step={step} change={setStep}/><MetricCard title="Peak Pressure" value={`${peak.toFixed(2)} kPa`} target={`${c.target_peak.toFixed(1)} kPa`} percent={peak/c.target_peak*100} tone="green" icon="wind"/><MetricCard title="Longest Hold" value={`${maxHold.toFixed(1)} s`} target={`${c.target_exhale_hold.toFixed(1)} s`} percent={maxHold/c.target_exhale_hold*100} tone="blue" icon="clock"/><MetricCard title="Repetitions" value={String(repetitionCount)} target="Session total" percent={0} tone="green" icon="clock"/></div></div>
     {saveError && <p role="alert" className="fixed bottom-24 left-1/2 z-50 max-w-[min(90vw,32rem)] -translate-x-1/2 rounded-lg bg-red-50 p-3 text-sm text-red-700 shadow-md">{saveError}</p>}
+    {/* TEMP: sound test slider (see SOUND_TEST). */}
+    {SOUND_TEST && <SoundTestSlider value={testPressure} max={levels[2] + 0.5} levels={levels} sa={sa} running={state === "running"} onChange={(v)=>{testPressureRef.current=v;setTestPressure(v);}}/>}
     <div className="mt-3 shrink-0"><SessionControlBar state={state} elapsed={elapsed} toggle={toggle} start={start} sensorConnected={sensorStatus === "connected"} restart={restart} end={finish} canRetry={!!saveError} saving={saving} soundOn={soundOn} audioReady={audioReady} toggleSound={toggleSound}/></div>
   </main></div>;
 }
