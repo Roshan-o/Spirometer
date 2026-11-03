@@ -37,12 +37,13 @@ function soundTestReadout(kpa: number, levels: number[], sa: number) {
     return sum + Math.max(0, Math.min(1, (kpa - floor) / (threshold - floor)));
   }, 0);
   if (position <= 0.02) return "silent";
-  const { freq, noise } = swaraAt(position, sa);
+  const { freq, noise, held } = swaraAt(position, sa);
   if (noise > 0) return `Noise → Ga · ${Math.round(noise * 100)}% noise`;
+  const chord = ["Ga", "Pa"].filter((_, i) => held[i] > 0.5);
   // Positions 1, 2 and 3 are exactly Ga, Pa and high Sa.
   const exact = [1, 2, 3].findIndex((n) => Math.abs(swaraAt(n, sa).freq - freq) < 0.01);
-  if (exact >= 0) return `${["Ga", "Pa", "Sa'"][exact]} (exact) · ${freq.toFixed(1)} Hz`;
-  return `${position < 2 ? "Ga → Pa" : "Pa → Sa'"} · ${freq.toFixed(1)} Hz`;
+  const lead = exact >= 0 ? ["Ga", "Pa", "Sa'"][exact] : `glide ${position < 2 ? "Ga → Pa" : "Pa → Sa'"} (${freq.toFixed(1)} Hz)`;
+  return [...chord, lead].join(" + ");
 }
 
 // TEMP: manual pressure slider for testing the swara sound without the Arduino.

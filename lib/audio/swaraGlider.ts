@@ -13,6 +13,10 @@
  * Near the top of each chamber (and the bottom of the next) the pitch holds
  * the exact swara, so a breath held there is heard as a clean Ga, Pa or Sa'.
  *
+ * A ball at the top keeps its swara sounding, so the notes build a chord:
+ * when the gliding voice leaves Ga, a held Ga stays behind (and likewise Pa).
+ * Green at the top plays Ga + Pa; orange at the top plays Ga + Pa + Sa'.
+ *
  * A soft Sa drone (like a tanpura) plays while the session runs. A swara is
  * only heard as Ga or Pa relative to Sa; without it the ear takes the first
  * clear note (Ga) as Sa, and the rest sound like the wrong swaras.
@@ -31,23 +35,32 @@ const SA_HIGH = 2;
 const HOLD = 0.1;
 
 const VOICE_LEVEL = 0.15;
+/** Held chord notes sit a little below the gliding voice so the moving line stays in front. */
+const HELD_MIX = 0.7;
+/** Swaras a ball holds once it reaches the top: blue → Ga, green → Pa (orange's Sa' is the glide's end). */
+const HELD = [GA, PA];
 /** Quiet enough to sit behind the breath voice, loud enough to anchor the ear on Sa. */
 const DRONE_LEVEL = 0.05;
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
-/** Map a stacked ball position (0–3) to the pitch and the amount of breath noise (1 = all noise). */
+/**
+ * Map a stacked ball position (0–3) to the gliding voice's pitch, its amount of
+ * breath noise (1 = all noise), and how loud each held chord note is (0–1, Ga then Pa).
+ */
 export function swaraAt(position: number, sa = DEFAULT_SA_HZ) {
   const p = Math.max(0, Math.min(3, position));
   const chamber = Math.min(2, Math.floor(p));
   const r = p - chamber;
+  // Each held note fades in just as the glide starts leaving it, so one voice splits into two.
+  const held = HELD.map((_, i) => clamp01((p - (i + 1 + HOLD)) / HOLD));
 
-  if (chamber === 0) return { freq: sa * GA, noise: 1 - clamp01(r / (1 - HOLD)) };
+  if (chamber === 0) return { freq: sa * GA, noise: 1 - clamp01(r / (1 - HOLD)), held };
 
   // Glide on a log scale, exactly like the slider's y → frequency mapping.
   const [from, to] = chamber === 1 ? [GA, PA] : [PA, SA_HIGH];
   const u = clamp01((r - HOLD) / (1 - 2 * HOLD));
-  return { freq: sa * from * Math.pow(to / from, u), noise: 0 };
+  return { freq: sa * from * Math.pow(to / from, u), noise: 0, held };
 }
 
 export class SwaraGlider {
@@ -60,6 +73,8 @@ export class SwaraGlider {
   private noise?: GainNode;
   private osc?: OscillatorNode;
   private noiseFilter?: BiquadFilterNode;
+  /** Gains of the held chord notes, in HELD order. */
+  private held: GainNode[] = [];
   private muted = false;
   private targets = new Map<GainNode, number>();
 
@@ -87,13 +102,26 @@ export class SwaraGlider {
     lowpass.type = "lowpass";
     lowpass.frequency.setValueAtTime(2000, t);
     lowpass.Q.setValueAtTime(1, t);
+    lowpass.connect(this.voice);
     this.tone = ctx.createGain();
     this.tone.gain.setValueAtTime(0, t);
     this.osc = ctx.createOscillator();
     this.osc.type = "sawtooth";
     this.osc.frequency.setValueAtTime(this.sa * GA, t);
-    this.osc.connect(lowpass).connect(this.tone).connect(this.voice);
+    this.osc.connect(this.tone).connect(lowpass);
     this.osc.start();
+
+    // Held chord notes: the same voice, fixed on Ga and Pa, silent until their ball tops out.
+    this.held = HELD.map((ratio) => {
+      const osc = ctx.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(this.sa * ratio, t);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, t);
+      osc.connect(gain).connect(lowpass);
+      osc.start();
+      return gain;
+    });
 
     // Noise voice: looping white noise → bandpass that narrows onto Ga.
     const buffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
@@ -135,9 +163,10 @@ export class SwaraGlider {
     if (!ctx || !tone || !noise || !osc || !noiseFilter) return;
     const position = ballHeights.reduce((sum, height) => sum + height, 0);
     const t = ctx.currentTime;
-    const { freq, noise: amount } = swaraAt(position, this.sa);
+    const { freq, noise: amount, held } = swaraAt(position, this.sa);
 
     osc.frequency.setTargetAtTime(freq, t, 0.03);
+    this.held.forEach((gain, i) => gain.gain.setTargetAtTime(held[i] * HELD_MIX, t, 0.03));
     // Equal-power crossfade so the noise → Ga transition has no loudness dip.
     tone.gain.setTargetAtTime(Math.sin((1 - amount) * Math.PI / 2), t, 0.03);
     noise.gain.setTargetAtTime(Math.cos((1 - amount) * Math.PI / 2) * 2, t, 0.03);
