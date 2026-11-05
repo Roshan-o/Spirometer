@@ -13,7 +13,7 @@
 
 ### Not yet implemented
 
-- **Level-based audio:** Carnatic music feedback based on pressure thresholds.
+- **Level-based audio:** Music feedback based on pressure thresholds.
 - **Hardware calibration:** the serial bridge conversion scale and pressure thresholds still need calibration against the selected sensor and prototype.
 
 ## APIs and Routes

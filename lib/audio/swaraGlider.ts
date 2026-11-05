@@ -1,7 +1,7 @@
 /**
  * lib/audio/swaraGlider.ts
  *
- * Breath-driven swara glider, adapted from the Gamaka Slider (index.html):
+ * Breath-driven swara glider, adapted from the pitch slider (index.html):
  * a sawtooth oscillator through a warm lowpass filter, gliding to the pitch
  * that matches the balls' height on a logarithmic scale.
  *

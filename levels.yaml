@@ -8,6 +8,6 @@ target_peak: 3.0
 target_exhale_hold: 8.0
 target_inhale_hold: 5.0
 
-# Tonic (Sa) for the breath sound and its drone, in Hz. 256 = textbook Sa, so Ga = 320, Pa = 384, high Sa = 512.
+# Tonic (Sa) for the breath sound and its drone, in Hz. 261.63 = C4, so Ga = 327.04, Pa = 392.44, high Sa = 523.26.
 # Blue ball: noise → Ga, green ball: Ga → Pa, orange ball: Pa → high Sa.
-sa_frequency: 256
+sa_frequency: 261.63
