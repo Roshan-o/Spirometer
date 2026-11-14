@@ -2,7 +2,7 @@
  * lib/audio/swaraGlider.ts
  *
  * Breath-driven swara glider, adapted from the pitch slider (index.html):
- * a sawtooth oscillator through a warm lowpass filter, gliding to the pitch
+ * a triangle oscillator through a warm lowpass filter, gliding to the pitch
  * that matches the balls' height on a logarithmic scale.
  *
  * The three ball heights (0–1 each) stack into one position from 0 (all
@@ -97,7 +97,8 @@ export class SwaraGlider {
     this.voice.gain.setValueAtTime(0, t);
     this.voice.connect(ctx.destination);
 
-    // Tone voice: sawtooth → lowpass for warmth (same as the slider).
+    // Tone voice: triangle → lowpass for warmth. (The slider used a sawtooth, but its strong
+    // overtones, e.g. Re and Ni above Pa, made the Ga + Pa and Ga + Pa + Sa' chords sound rough.)
     const lowpass = ctx.createBiquadFilter();
     lowpass.type = "lowpass";
     lowpass.frequency.setValueAtTime(2000, t);
@@ -106,15 +107,17 @@ export class SwaraGlider {
     this.tone = ctx.createGain();
     this.tone.gain.setValueAtTime(0, t);
     this.osc = ctx.createOscillator();
-    this.osc.type = "sawtooth";
+    this.osc.type = "triangle";
     this.osc.frequency.setValueAtTime(this.sa * GA, t);
     this.osc.connect(this.tone).connect(lowpass);
     this.osc.start();
 
-    // Held chord notes: the same voice, fixed on Ga and Pa, silent until their ball tops out.
+    // Held chord notes: fixed on Ga and Pa, silent until their ball tops out. Pure sines, so the
+    // chord stays soft instead of buzzing (stacked sawtooth Ga + Pa made the ear hear a low hum
+    // at Sa/4, ~65 Hz).
     this.held = HELD.map((ratio) => {
       const osc = ctx.createOscillator();
-      osc.type = "sawtooth";
+      osc.type = "sine";
       osc.frequency.setValueAtTime(this.sa * ratio, t);
       const gain = ctx.createGain();
       gain.gain.setValueAtTime(0, t);
@@ -137,11 +140,12 @@ export class SwaraGlider {
     source.connect(this.noiseFilter).connect(this.noise).connect(this.voice);
     source.start();
 
-    // Drone: Sa plus the Sa an octave below, soft waveforms so the breath voice stays in front.
+    // Drone: Sa alone, a soft triangle so the breath voice stays in front. (The Sa an octave
+    // below was dropped: at 131 Hz it added to the low hum under the Ga + Pa chord.)
     this.drone = ctx.createGain();
     this.drone.gain.setValueAtTime(0, t);
     this.drone.connect(ctx.destination);
-    for (const [freq, type, mix] of [[this.sa, "triangle", 1], [this.sa / 2, "sine", 0.7]] as const) {
+    for (const [freq, type, mix] of [[this.sa, "triangle", 1]] as const) {
       const osc = ctx.createOscillator();
       osc.type = type;
       osc.frequency.setValueAtTime(freq, t);
