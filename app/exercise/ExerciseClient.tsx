@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock3, LayoutDashboard, LogOut, Pause, Play, RefreshCw, StopCircle, Volume2, VolumeX, Wind } from "lucide-react";
 import { logout } from "../actions/auth";
 import { usePressureSensor } from "@/lib/sensor/usePressureSensor";
-import { DEFAULT_SA_HZ, SwaraGlider, swaraAt } from "@/lib/audio/swaraGlider";
+import { DEFAULT_SA_HZ, SwaraGlider } from "@/lib/audio/swaraGlider";
 import { saveExerciseSession, type CompletedRepetition } from "../actions/sessions";
 
 // Steps follow standard incentive-spirometer instructions.
@@ -29,40 +29,6 @@ type ExerciseConfig = {
   sa_frequency?: number;
 };
 const BALL_COLORS = ["#1E73E8", "#2EB84B", "#F59E0B"];
-
-// TEMP: sound test mode. Pretends the sensor is connected and drives the balls and sound
-// from a manual pressure slider. To remove: delete every block marked TEMP (and `swaraAt` from the import).
-const SOUND_TEST = true;
-
-// TEMP: what the sound settles to at a given test pressure.
-function soundTestReadout(kpa: number, levels: number[], sa: number) {
-  const position = levels.reduce((sum, threshold, i) => {
-    const floor = i ? levels[i - 1] : 0;
-    return sum + Math.max(0, Math.min(1, (kpa - floor) / (threshold - floor)));
-  }, 0);
-  if (position <= 0.02) return "silent";
-  const { freq, noise, held } = swaraAt(position, sa);
-  if (noise > 0) return `Noise → Ga · ${Math.round(noise * 100)}% noise`;
-  const chord = ["Ga", "Pa"].filter((_, i) => held[i] > 0.5);
-  // Positions 1, 2 and 3 are exactly Ga, Pa and high Sa.
-  const exact = [1, 2, 3].findIndex((n) => Math.abs(swaraAt(n, sa).freq - freq) < 0.01);
-  const lead = exact >= 0 ? ["Ga", "Pa", "Sa'"][exact] : `glide ${position < 2 ? "Ga → Pa" : "Pa → Sa'"} (${freq.toFixed(1)} Hz)`;
-  return [...chord, lead].join(" + ");
-}
-
-// TEMP: manual pressure slider for testing the swara sound without the Arduino.
-function SoundTestSlider({ value, max, levels, sa, running, onChange }: { value:number; max:number; levels:number[]; sa:number; running:boolean; onChange:(v:number)=>void }) {
-  return <section className="mt-3 shrink-0 rounded-[16px] border border-dashed border-[#f0b45a] bg-[#FFF8EC] px-4 py-3">
-    <div className="flex flex-wrap items-center justify-between gap-2 text-[12px]">
-      <b className="text-[#9a5b00]">Sound test (temporary): sensor simulated{running ? "" : " · press Start Session to hear it"}</b>
-      <span className="tabular-nums text-[#0F2A43]">{value.toFixed(2)} kPa · {soundTestReadout(value, levels, sa)}</span>
-    </div>
-    <input type="range" min={0} max={max} step={0.01} value={value} onChange={(e)=>onChange(Number(e.target.value))} aria-label="Test pressure in kPa" className="mt-2 w-full accent-[#1E6FE0]"/>
-    <div className="relative h-4 text-[10px] text-[#6B7C8F]">
-      {[0, ...levels].map((kpa, i) => <span key={i} className={`absolute whitespace-nowrap ${i ? "-translate-x-1/2" : ""}`} style={{left:`${kpa / max * 100}%`, color: i ? BALL_COLORS[i-1] : undefined}}>{["Noise", "Ga", "Pa", "Sa'"][i]}</span>)}
-    </div>
-  </section>;
-}
 
 function Sidebar() {
   const router = useRouter();
@@ -87,7 +53,7 @@ function MobileNav() {
 
 function PageHeader({ status, userName }: { status: string; userName: string }) {
   const connection = status === "connected" ? ["Connected", "Sensor Active"] : status === "connecting" ? ["Connecting", "Waiting for sensor"] : ["Disconnected", "No sensor"];
-  return <header className="mb-3 flex min-h-[56px] shrink-0 flex-wrap items-start justify-between gap-x-4 gap-y-2">
+  return <header className="mb-3 flex min-h-[56px] fit:mb-10 shrink-0 flex-wrap items-start justify-between gap-x-4 gap-y-2">
     <div className="min-w-0"><h1 className="text-[30px] font-bold leading-9 tracking-[-.7px] text-[#0F2A43] max-sm:text-[24px] max-sm:leading-8">Breathing Session</h1><p className="mt-0.5 text-[13px] text-[#6B7C8F]">Follow the instructions and keep the balls in the target zone.</p></div>
     <div className="flex items-center gap-3 pt-0.5"><div className="flex items-center gap-2 rounded-xl border border-[#edf1f5] bg-white px-3 py-1.5 shadow-sm"><span className={`h-2 w-2 rounded-full ${status === 'connected' ? 'bg-[#2EB84B]' : 'bg-[#9aaaba]'}`}/><span><b className="block text-[11px] font-medium text-[#25384a]">{connection[0]}</b><small className="block text-[10px] leading-3 text-[#7f8d9b]">{connection[1]}</small></span></div><div className="flex items-center gap-2 rounded-xl border border-[#edf1f5] bg-white px-2.5 py-1.5 shadow-sm"><span className="grid h-6 w-6 place-items-center rounded-full bg-[#4c79df] text-[11px] font-semibold text-white">{userName[0]?.toUpperCase()}</span><span className="text-[11px] text-[#26384a]">{userName}</span><ChevronDown size={12} className="text-gray-400"/></div></div>
   </header>;
@@ -154,11 +120,7 @@ export default function ExerciseClient({ userName, config }: { userName: string;
   const c = config || { easy: 1, medium: 2, hard: 3, target_peak: 3, target_exhale_hold: 8, target_inhale_hold: 5 };
   const levels = useMemo(() => [c.easy, c.medium, c.hard] as number[], [c.easy, c.medium, c.hard]);
   const router = useRouter();
-  const { pressure, pressureRef: sensorPressureRef, status: realSensorStatus, connect, disconnect } = usePressureSensor();
-  // TEMP: sound test overrides (see SOUND_TEST).
-  const sensorStatus = SOUND_TEST ? "connected" : realSensorStatus;
-  const [testPressure, setTestPressure] = useState(0);
-  const testPressureRef = useRef(0);
+  const { pressure, pressureRef: sensorPressureRef, status: sensorStatus, connect, disconnect } = usePressureSensor();
   const [step, setStep] = useState(0);
   // The session waits for "Start Session"; the sensor still connects meanwhile so its status shows.
   const [state, setState] = useState<State>("idle");
@@ -294,8 +256,7 @@ export default function ExerciseClient({ userName, config }: { userName: string;
       const dt = Math.min((now - previous) / 1000, 0.1);
       previous = now;
       elapsedRef.current += dt;
-      // TEMP: SOUND_TEST reads the slider instead of the sensor.
-      const raw = SOUND_TEST ? testPressureRef.current : sensorPressureRef ? sensorPressureRef.current : pressureRef.current;
+      const raw = sensorPressureRef ? sensorPressureRef.current : pressureRef.current;
       const p = Math.abs(raw);
       if (p >= 0.5) {
         const level = levels.filter((threshold) => p >= threshold).length;
@@ -358,11 +319,10 @@ export default function ExerciseClient({ userName, config }: { userName: string;
 
   useEffect(() => () => disconnect(), [disconnect]);
 
-  return <div className="flex min-h-dvh bg-[#F4F8FC] font-sans text-[#0F2A43] fit:h-dvh fit:overflow-hidden"><Sidebar/><main className="flex min-w-0 flex-1 flex-col px-[25px] py-3 max-md:px-4 fit:h-dvh"><MobileNav/><PageHeader status={sensorStatus} userName={userName}/>
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] fit:min-h-0 fit:flex-1"><SpirometerCard pressure={displayPressure} tubeRefs={tubeRefs} ballRefs={ballRefs} levels={levels}/><div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 fit:min-h-0 fit:grid-rows-[1.65fr_1fr_1fr_0.8fr]"><BreathingGuideCard step={step} change={setStep}/><MetricCard title="Peak Pressure" value={`${peak.toFixed(2)} kPa`} target={`${c.target_peak.toFixed(1)} kPa`} percent={peak/c.target_peak*100} tone="green" icon="wind"/><MetricCard title="Longest Hold" value={`${maxHold.toFixed(1)} s`} target={`${c.target_exhale_hold.toFixed(1)} s`} percent={maxHold/c.target_exhale_hold*100} tone="blue" icon="clock"/><MetricCard title="Repetitions" value={String(repetitionCount)} target="Session total" percent={0} tone="green" icon="clock"/></div></div>
+  return <div className="flex min-h-dvh bg-[#F4F8FC] font-sans text-[#0F2A43] fit:h-dvh fit:overflow-hidden"><Sidebar/><main className="flex min-w-0 flex-1 flex-col px-[25px] py-3 max-md:px-4 fit:h-dvh fit:py-6"><MobileNav/><PageHeader status={sensorStatus} userName={userName}/>
+    {/* On tall screens the content is capped and centred, so the tubes keep their proportions instead of stretching. */}
+    <div className="fit:flex fit:min-h-0 fit:flex-1 fit:flex-col fit:justify-center"><div className="grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] fit:min-h-0 fit:max-h-[660px] fit:flex-1"><SpirometerCard pressure={displayPressure} tubeRefs={tubeRefs} ballRefs={ballRefs} levels={levels}/><div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 fit:min-h-0 fit:grid-rows-[1.65fr_1fr_1fr_0.8fr]"><BreathingGuideCard step={step} change={setStep}/><MetricCard title="Peak Pressure" value={`${peak.toFixed(2)} kPa`} target={`${c.target_peak.toFixed(1)} kPa`} percent={peak/c.target_peak*100} tone="green" icon="wind"/><MetricCard title="Longest Hold" value={`${maxHold.toFixed(1)} s`} target={`${c.target_exhale_hold.toFixed(1)} s`} percent={maxHold/c.target_exhale_hold*100} tone="blue" icon="clock"/><MetricCard title="Repetitions" value={String(repetitionCount)} target="Session total" percent={0} tone="green" icon="clock"/></div></div>
     {saveError && <p role="alert" className="fixed bottom-24 left-1/2 z-50 max-w-[min(90vw,32rem)] -translate-x-1/2 rounded-lg bg-red-50 p-3 text-sm text-red-700 shadow-md">{saveError}</p>}
-    {/* TEMP: sound test slider (see SOUND_TEST). */}
-    {SOUND_TEST && <SoundTestSlider value={testPressure} max={levels[2] + 0.5} levels={levels} sa={sa} running={state === "running"} onChange={(v)=>{testPressureRef.current=v;setTestPressure(v);}}/>}
-    <div className="mt-3 shrink-0"><SessionControlBar state={state} elapsed={elapsed} toggle={toggle} start={start} sensorConnected={sensorStatus === "connected"} restart={restart} end={finish} canRetry={!!saveError} saving={saving} soundOn={soundOn} audioReady={audioReady} toggleSound={toggleSound}/></div>
+    <div className="mt-3 shrink-0 fit:mt-[52px]"><SessionControlBar state={state} elapsed={elapsed} toggle={toggle} start={start} sensorConnected={sensorStatus === "connected"} restart={restart} end={finish} canRetry={!!saveError} saving={saving} soundOn={soundOn} audioReady={audioReady} toggleSound={toggleSound}/></div></div>
   </main></div>;
 }
