@@ -49,7 +49,7 @@ export default function DownloadReportButton() {
 
   return (
     <>
-      <button onClick={() => { setOpen(true); setError(""); }} className="flex items-center gap-2 rounded-xl border border-[#d8e5fa] bg-white px-3 py-2 text-[11px] font-semibold text-[#1763df] shadow-sm hover:bg-[#f4f8ff]">
+      <button onClick={() => { setOpen(true); setError(""); }} className="flex items-center gap-2 rounded-xl border border-[#d8e5fa] bg-white px-3 py-2 text-[13px] font-semibold text-[#1763df] shadow-sm hover:bg-[#f4f8ff]">
         <Download size={14}/>Download Report
       </button>
 
@@ -58,8 +58,8 @@ export default function DownloadReportButton() {
           <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="report-title" onClick={(e) => e.stopPropagation()} className="w-full max-w-[420px] rounded-2xl bg-white p-5 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 id="report-title" className="text-[16px] font-bold text-[#10264a]">Download progress report</h2>
-                <p className="mt-0.5 text-[11px] text-[#6b7e9d]">A PDF of your breathing practice to share with your doctor. Which period should it cover?</p>
+                <h2 id="report-title" className="text-[18px] font-bold text-[#10264a]">Download progress report</h2>
+                <p className="mt-0.5 text-[13px] text-[#6b7e9d]">A PDF of your breathing practice to share with your doctor. Which period should it cover?</p>
               </div>
               <button aria-label="Close" disabled={!!busy} onClick={() => setOpen(false)} className="rounded-md p-1 text-[#8b98aa] hover:bg-[#f3f7fd]"><X size={16}/></button>
             </div>
@@ -68,13 +68,13 @@ export default function DownloadReportButton() {
               {PERIODS.map(({ value, label, detail, icon: Icon, color, tint }) => (
                 <button key={value} disabled={!!busy} onClick={() => download(value)} style={{ backgroundColor: tint }} className="flex flex-col items-start gap-1.5 rounded-xl border border-transparent p-3 text-left transition hover:border-current disabled:opacity-60">
                   <span className="grid h-7 w-7 place-items-center rounded-lg bg-white" style={{ color }}>{busy === value ? <Loader2 size={15} className="animate-spin"/> : <Icon size={15}/>}</span>
-                  <span className="text-[13px] font-bold" style={{ color }}>{label}</span>
-                  <span className="text-[10px] text-[#6b7e9d]">{busy === value ? "Preparing PDF…" : detail}</span>
+                  <span className="text-[15px] font-bold" style={{ color }}>{label}</span>
+                  <span className="text-[12px] text-[#6b7e9d]">{busy === value ? "Preparing PDF…" : detail}</span>
                 </button>
               ))}
             </div>
 
-            {error && <p role="alert" className="mt-3 text-[11px] text-[#d14343]">{error}</p>}
+            {error && <p role="alert" className="mt-3 text-[13px] text-[#d14343]">{error}</p>}
           </div>
         </div>
       )}
