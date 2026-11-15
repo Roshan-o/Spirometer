@@ -15,6 +15,7 @@ model User {
   createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz
   updatedAt    DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
   sessions     ExerciseSession[]
+  reminders    Reminder[]
 
   @@map("users")
 }
@@ -48,4 +49,26 @@ model Repetition {
   session      ExerciseSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@map("repetitions")
+}
+
+/// A breathing-exercise reminder emailed to the user at a local time on chosen weekdays.
+model Reminder {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  /// Local time in the user's timezone, 24-hour clock.
+  hour       Int
+  minute     Int
+  /// Weekdays it fires on: 0 = Sunday ... 6 = Saturday.
+  days       Int[]
+  /// IANA timezone the time is in, e.g. "Asia/Kolkata".
+  timezone   String   @db.VarChar(64)
+  enabled    Boolean  @default(true)
+  /// Local date (YYYY-MM-DD) of the last email sent, so a reminder fires at most once a day.
+  lastSentOn String?  @map("last_sent_on") @db.VarChar(10)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("reminders")
 }

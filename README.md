@@ -39,7 +39,15 @@ Create a `.env` file in the root directory:
 ```env
 DATABASE_URL="postgresql://USER:PASSWORD@HOST/DATABASE?sslmode=require"
 JWT_SECRET="your-secure-secret-key"
+
+# Reminder emails (optional): a Gmail address and its 16-character App Password
+# (Google Account → Security → 2-Step Verification → App passwords)
+GMAIL_USER="you@gmail.com"
+GMAIL_APP_PASSWORD="abcd efgh ijkl mnop"
+APP_URL="http://localhost:3000"
 ```
+
+Reminders are checked every 30 seconds while the server is running and emailed to the user's login address. A reminder whose time passes while the server is off is skipped.
 
 ### 3. Initialize the Database
 Generate the Prisma client and push the schema to PostgreSQL:

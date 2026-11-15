@@ -41,7 +41,24 @@ CREATE TABLE repetitions (
     CONSTRAINT fk_session FOREIGN KEY (session_id) REFERENCES exercise_sessions(id) ON DELETE CASCADE
 );
 
+-- 4. Reminders Table
+-- Breathing-exercise reminders emailed at a local time on chosen weekdays.
+CREATE TABLE reminders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    hour INTEGER NOT NULL,          -- 0-23, local time
+    minute INTEGER NOT NULL,        -- 0-59
+    days INTEGER[] NOT NULL,        -- weekdays, 0 = Sunday ... 6 = Saturday
+    timezone VARCHAR(64) NOT NULL,  -- IANA name, e.g. Asia/Kolkata
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    last_sent_on VARCHAR(10),       -- local YYYY-MM-DD of the last email sent
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_reminder_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 -- Indexes for performance
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_sessions_user_id ON exercise_sessions(user_id);
 CREATE INDEX idx_repetitions_session_id ON repetitions(session_id);
+CREATE INDEX idx_reminders_user_id ON reminders(user_id);

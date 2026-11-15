@@ -18,6 +18,11 @@ export default async function DashboardPage() {
     where: { userId: user.id },
     orderBy: { startTime: "desc" },
   });
+  const reminders = await prisma.reminder.findMany({
+    where: { userId: user.id },
+    orderBy: [{ hour: "asc" }, { minute: "asc" }, { createdAt: "asc" }],
+    select: { id: true, hour: true, minute: true, days: true, enabled: true },
+  });
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const startOfWeek = new Date(startOfToday);
@@ -80,6 +85,7 @@ export default async function DashboardPage() {
       }))}
       chartData={chartData}
       consistencyData={consistencyData}
+      reminders={reminders}
     />
   );
 }

@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Activity, ArrowRight, CalendarDays, CircleHelp, Clock3, LayoutDashboard, LogOut, Play, Wind } from "lucide-react";
 import { logout } from "../actions/auth";
+import RemindersCard, { type ReminderRow } from "./RemindersCard";
+import DownloadReportButton from "./DownloadReportButton";
 
 type SessionRow = {
   id: string;
@@ -30,6 +32,7 @@ interface Props {
   sessions: SessionRow[];
   chartData: ChartPoint[];
   consistencyData: { date: string; count: number; isToday?: boolean }[];
+  reminders: ReminderRow[];
 }
 
 const chartRanges = ["Week", "Month", "All Time"] as const;
@@ -50,7 +53,7 @@ function durationLabel(value: string) {
   return minutes ? `${minutes}m ${remainder}s` : `${remainder}s`;
 }
 
-export default function DashboardClient({ userName, stats, sessions, chartData, consistencyData }: Props) {
+export default function DashboardClient({ userName, stats, sessions, chartData, consistencyData, reminders }: Props) {
   const router = useRouter();
   const [range, setRange] = useState<(typeof chartRanges)[number]>("Week");
   const filteredChart = useMemo(() => {
@@ -87,11 +90,11 @@ export default function DashboardClient({ userName, stats, sessions, chartData, 
       <main className="mx-auto min-w-0 flex-1 px-7 py-6 max-md:px-4 max-md:py-4">
         <header className="mb-5 flex items-center justify-between gap-4">
           <div><h1 className="text-[23px] font-bold tracking-tight">{greeting()}, {userName}!</h1><p className="mt-0.5 text-[12px] text-[#75849a]">Let’s keep your lungs strong and your music going.</p></div>
-          <div className="flex items-center gap-3 rounded-xl border border-[#e8edf5] bg-white px-3 py-2 shadow-sm"><span className="grid h-7 w-7 place-items-center rounded-full bg-[#3978ed] text-[11px] font-bold text-white">{userName.charAt(0).toUpperCase()}</span><span className="max-w-36 truncate text-[11px] font-semibold">{userName}</span></div>
+          <div className="flex items-center gap-2"><DownloadReportButton/><div className="flex items-center gap-3 rounded-xl border border-[#e8edf5] bg-white px-3 py-2 shadow-sm"><span className="grid h-7 w-7 place-items-center rounded-full bg-[#3978ed] text-[11px] font-bold text-white">{userName.charAt(0).toUpperCase()}</span><span className="max-w-36 truncate text-[11px] font-semibold">{userName}</span></div></div>
         </header>
 
-        <section className="mb-4 grid min-h-[172px] grid-cols-[minmax(0,1fr)_minmax(270px,390px)] gap-5 rounded-xl bg-gradient-to-r from-[#e6efff] to-[#eff5ff] p-5 max-lg:grid-cols-1">
-          <div className="flex flex-col items-start justify-center">
+        <section className="mb-4 grid min-h-[172px] grid-cols-1 gap-5 rounded-xl bg-gradient-to-r from-[#e6efff] to-[#eff5ff] p-5 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(260px,360px)_minmax(260px,330px)]">
+          <div className="flex flex-col items-start justify-center md:col-span-2 xl:col-span-1">
             <h2 className="text-[18px] font-bold">Ready for a Breathing Session?</h2>
             <p className="mt-1 text-[12px] text-[#6b7e9d]">Play, breathe, and track your progress in real time.</p>
             <Link href="/exercise" className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#1763df] px-5 py-2.5 text-[12px] font-semibold text-white shadow-[0_4px_10px_rgba(23,99,223,.25)] hover:bg-[#1056c8]"><Play size={14} fill="currentColor"/>Start Breathing Session<ArrowRight size={14}/></Link>
@@ -100,6 +103,7 @@ export default function DashboardClient({ userName, stats, sessions, chartData, 
             <div className="mb-2 flex items-center justify-between"><h3 className="text-[12px] font-bold">Recent Sessions</h3><a href="#session-history" className="flex items-center gap-1 text-[10px] font-medium text-[#1763df]">View All <ArrowRight size={11}/></a></div>
             {sessions.length === 0 ? <p className="py-4 text-[11px] text-[#8491a4]">Your completed sessions will appear here.</p> : <div className="divide-y divide-[#f0f3f8]">{sessions.slice(0, 4).map((session) => <div key={session.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 py-1.5 text-[10px]"><div className="min-w-0"><div className="truncate font-medium text-[#485b76]">{session.date}</div><div className="text-[9px] text-[#96a2b3]">{session.time}</div></div><span className="whitespace-nowrap text-[#677890]">{durationLabel(session.duration)}</span><span className="whitespace-nowrap font-medium text-[#40536f]">{session.pressure} kPa</span></div>)}</div>}
           </div>
+          <RemindersCard reminders={reminders}/>
         </section>
 
         <section className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
