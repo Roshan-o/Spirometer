@@ -291,7 +291,7 @@ function SessionTable({ data }: { data: ReportData }) {
 function HowToRead({ data }: { data: ReportData }) {
   const t = data.targets;
   const items = [
-    ["Peak pressure (kPa)", "How hard the patient breathed out into the spirometer, in kilopascals. Higher means stronger breath."],
+    ["Peak pressure (kPa)", "Breath pressure at the spirometer mouthpiece while breathing in, in kilopascals. Higher means a stronger, deeper breath."],
     ["Levels", `Easy from ${t.easy} kPa, Medium from ${t.medium} kPa, Hard from ${t.hard} kPa. Below Easy is a warm-up breath.`],
     ["Longest hold", "The longest time a single breath was held steadily at one level."],
     ["Breaths (repetitions)", "Separate breaths taken during a session."],

@@ -9,10 +9,14 @@ import { usePressureSensor } from "@/lib/sensor/usePressureSensor";
 import { DEFAULT_SA_HZ, SwaraGlider, swaraAt } from "@/lib/audio/swaraGlider";
 import { saveExerciseSession, type CompletedRepetition } from "../actions/sessions";
 
+// Steps follow standard incentive-spirometer instructions.
 const guides = [
-  ["Take a deep breath", "Sit upright and take a slow, comfortable breath before using the mouthpiece."],
-  ["Seal and breathe steadily", "Keep your lips sealed around the mouthpiece and follow the breathing target shown on screen."],
-  ["Hold and release", "Keep the balls in the green zone as long as you can, then relax and breathe out."],
+  ["Get ready", "Sit upright on the edge of your bed or chair. Hold the spirometer upright and breathe out normally."],
+  ["Seal the mouthpiece", "Place the mouthpiece in your mouth and close your lips tightly around it."],
+  ["Breathe in slowly and deeply", "Breathe in through your mouth as slowly and deeply as you can, so the balls rise toward the top. If they shoot up too fast, slow down."],
+  ["Hold, then relax", "Hold your breath for 3–5 seconds, or as long as you can. Then remove the mouthpiece and breathe out normally."],
+  ["Rest and repeat", "Rest for a few seconds with some normal breaths, then repeat 10 or more times. After each set of 10, cough a few times to clear your lungs."],
+  ["Make it a habit", "Do a set every 1–2 hours while you're awake. Stop and rest if you feel lightheaded, and tell your doctor if you keep missing your target."],
 ] as const;
 type State = "idle" | "running" | "paused" | "ended";
 type ExerciseConfig = {
@@ -113,7 +117,7 @@ function SpirometerCard({ pressure, tubeRefs, ballRefs, levels }: { pressure:num
 
 function BreathingGuideCard({ step, change }: { step:number; change:(n:number)=>void }) {
   const [title, text] = guides[step];
-  return <section className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-[20px] bg-white p-5 shadow-[0_4px_16px_rgba(30,80,140,.08)] max-sm:p-4 sm:col-span-3 lg:col-span-1"><div className="flex shrink-0 items-center justify-between"><h2 className="text-[15px] font-bold text-[#0F2A43]">Breathing Guide</h2><span className="tabular-nums text-[11px] text-[#566779]">{step+1} / 3</span></div><div className="flex min-h-0 flex-1 flex-col justify-center"><h3 className="text-[clamp(17px,1.6vw,22px)] font-bold leading-tight tracking-[-.35px] text-[#0F2A43]">{step+1}. {title}</h3><p className="mt-2 max-w-[470px] text-[clamp(12px,1.15vw,16px)] leading-[1.4] text-[#6B7C8F]">{text}</p></div><div className="flex shrink-0 items-center justify-between"><div className="flex gap-1.5">{guides.map((_,i)=><button key={i} aria-label={`Guide step ${i+1}`} onClick={()=>change(i)} className={`h-1.5 rounded-full ${i===step?'w-6 bg-[#1E6FE0]':'w-1.5 bg-[#d4dfeb]'}`}/>)}</div><div className="flex gap-2"><button aria-label="Previous step" disabled={step===0} onClick={()=>change(Math.max(0,step-1))} className="grid h-9 w-9 place-items-center rounded-full bg-[#E8EFF7] text-[#63758a] disabled:opacity-45"><ChevronLeft size={17}/></button><button aria-label="Next step" disabled={step===2} onClick={()=>change(Math.min(2,step+1))} className="grid h-9 w-9 place-items-center rounded-full bg-[#1E6FE0] text-white disabled:opacity-45"><ChevronRight size={17}/></button></div></div></section>;
+  return <section className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-[20px] bg-white p-5 shadow-[0_4px_16px_rgba(30,80,140,.08)] max-sm:p-4 sm:col-span-3 lg:col-span-1"><div className="flex shrink-0 items-center justify-between"><h2 className="text-[15px] font-bold text-[#0F2A43]">Breathing Guide</h2><span className="tabular-nums text-[11px] text-[#566779]">{step+1} / {guides.length}</span></div><div className="flex min-h-0 flex-1 flex-col justify-center"><h3 className="text-[clamp(17px,1.6vw,22px)] font-bold leading-tight tracking-[-.35px] text-[#0F2A43]">{step+1}. {title}</h3><p className="mt-2 max-w-[470px] text-[clamp(12px,1.15vw,16px)] leading-[1.4] text-[#6B7C8F]">{text}</p></div><div className="flex shrink-0 items-center justify-between"><div className="flex gap-1.5">{guides.map((_,i)=><button key={i} aria-label={`Guide step ${i+1}`} onClick={()=>change(i)} className={`h-1.5 rounded-full ${i===step?'w-6 bg-[#1E6FE0]':'w-1.5 bg-[#d4dfeb]'}`}/>)}</div><div className="flex gap-2"><button aria-label="Previous step" disabled={step===0} onClick={()=>change(Math.max(0,step-1))} className="grid h-9 w-9 place-items-center rounded-full bg-[#E8EFF7] text-[#63758a] disabled:opacity-45"><ChevronLeft size={17}/></button><button aria-label="Next step" disabled={step===guides.length-1} onClick={()=>change(Math.min(guides.length-1,step+1))} className="grid h-9 w-9 place-items-center rounded-full bg-[#1E6FE0] text-white disabled:opacity-45"><ChevronRight size={17}/></button></div></div></section>;
 }
 
 function MetricCard({ title, value, target, percent, tone, icon }: {title:string;value:string;target:string;percent:number;tone:"green"|"blue";icon:"wind"|"clock"}) {

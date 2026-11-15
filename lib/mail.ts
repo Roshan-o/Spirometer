@@ -44,7 +44,7 @@ export async function sendReminderEmail(to: string, name: string, time: string) 
     "",
     "A few minutes with your BreathNote spirometer keeps your lungs strong:",
     "  • Sit upright and relax your shoulders.",
-    "  • Breathe out steadily and raise the balls, Ga → Pa → Sa'.",
+    "  • Breathe in slowly and deeply to raise the balls, Ga → Pa → Sa'.",
     "  • Hold each note as long as you comfortably can, then rest.",
     "",
     `Start your session: ${link}`,
@@ -60,7 +60,7 @@ export async function sendReminderEmail(to: string, name: string, time: string) 
     <p style="font-size:14px;margin:0 0 8px;color:#41556f">A few minutes with your spirometer keeps your lungs strong:</p>
     <ul style="font-size:14px;color:#41556f;margin:0 0 20px;padding-left:20px">
       <li>Sit upright and relax your shoulders.</li>
-      <li>Breathe out steadily and raise the balls, Ga → Pa → Sa'.</li>
+      <li>Breathe in slowly and deeply to raise the balls, Ga → Pa → Sa'.</li>
       <li>Hold each note as long as you comfortably can, then rest.</li>
     </ul>
     <a href="${link}" style="display:inline-block;background:#1763df;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:10px 20px;border-radius:999px">Start Breathing Session</a>

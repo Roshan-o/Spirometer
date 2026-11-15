@@ -117,7 +117,7 @@ export class SwaraGlider {
     // at Sa/4, ~65 Hz).
     this.held = HELD.map((ratio) => {
       const osc = ctx.createOscillator();
-      osc.type = "sine";
+      osc.type = "sawtooth";
       osc.frequency.setValueAtTime(this.sa * ratio, t);
       const gain = ctx.createGain();
       gain.gain.setValueAtTime(0, t);
