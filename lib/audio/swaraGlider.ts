@@ -17,9 +17,8 @@
  * when the gliding voice leaves Ga, a held Ga stays behind (and likewise Pa).
  * Green at the top plays Ga + Pa; orange at the top plays Ga + Pa + Sa'.
  *
- * A soft Sa drone (like a tanpura) plays while the session runs. A swara is
- * only heard as Ga or Pa relative to Sa; without it the ear takes the first
- * clear note (Ga) as Sa, and the rest sound like the wrong swaras.
+ * Sa itself is never played. It is only the reference pitch from which Ga,
+ * Pa and the upper Sa are calculated (5/4, 3/2 and 2 times Sa).
  */
 
 /** Default tonic: 256 Hz, the textbook Sa. Ga, Pa and high Sa are then 320, 384 and 512 Hz. */
@@ -39,8 +38,6 @@ const VOICE_LEVEL = 0.15;
 const HELD_MIX = 0.7;
 /** Swaras a ball holds once it reaches the top: blue → Ga, green → Pa (orange's Sa' is the glide's end). */
 const HELD = [GA, PA];
-/** Quiet enough to sit behind the breath voice, loud enough to anchor the ear on Sa. */
-const DRONE_LEVEL = 0.05;
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
@@ -67,8 +64,6 @@ export class SwaraGlider {
   private ctx?: AudioContext;
   /** Breath voice (tone + noise); silent while the balls rest. */
   private voice?: GainNode;
-  /** Sa drone; sounds for the whole running session. */
-  private drone?: GainNode;
   private tone?: GainNode;
   private noise?: GainNode;
   private osc?: OscillatorNode;
@@ -140,21 +135,6 @@ export class SwaraGlider {
     source.connect(this.noiseFilter).connect(this.noise).connect(this.voice);
     source.start();
 
-    // Drone: Sa alone, a soft triangle so the breath voice stays in front. (The Sa an octave
-    // below was dropped: at 131 Hz it added to the low hum under the Ga + Pa chord.)
-    this.drone = ctx.createGain();
-    this.drone.gain.setValueAtTime(0, t);
-    this.drone.connect(ctx.destination);
-    for (const [freq, type, mix] of [[this.sa, "triangle", 1]] as const) {
-      const osc = ctx.createOscillator();
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, t);
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(mix, t);
-      osc.connect(gain).connect(this.drone);
-      osc.start();
-    }
-
     this.ctx = ctx;
   }
 
@@ -179,7 +159,6 @@ export class SwaraGlider {
     noiseFilter.Q.setTargetAtTime(0.7 + (1 - amount) * 12, t, 0.03);
 
     const audible = active && !this.muted;
-    this.fade(this.drone, audible ? DRONE_LEVEL : 0, 0.3);
     // The breath voice is silent while the balls rest at the bottom.
     this.fade(this.voice, audible && position > 0.02 ? VOICE_LEVEL : 0, 0.02);
   }
@@ -193,7 +172,6 @@ export class SwaraGlider {
   /** Fade everything out (pause, end, hidden tab). The next update() brings it back. */
   silence() {
     this.fade(this.voice, 0);
-    this.fade(this.drone, 0);
   }
 
   /** Ramp a gain to `level`; `rise` is the fade-in time constant in seconds. */

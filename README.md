@@ -2,7 +2,7 @@
 
 A sensor-based smart incentive spirometer web application built with **Next.js**, **Prisma**, and **Neon PostgreSQL**, integrated with an **Arduino + HX710B pressure sensor**.
 
-> For architecture details and database schema design, see [`REPORT.md`](./REPORT.md).
+> For architecture details and database schema design, see the [project report](./Project%20Report/report.pdf).
 
 ---
 
@@ -84,3 +84,12 @@ Open [http://localhost:3000](http://localhost:3000) in Chrome.
 | `npm run dev` | Start development server |
 | `npm run build` | Build for production |
 | `npm run seed` | Seed the database with dummy data |
+
+---
+
+## 📄 Example Progress Report
+
+The dashboard's **Download report** button generates a PDF progress report for the last 30 days.
+A sample is kept at [`docs/examples/BreathNote_Report_Karthik_2026-11-16.pdf`](./docs/examples/BreathNote_Report_Karthik_2026-11-16.pdf).
+
+It is built by [`app/api/report/route.ts`](./app/api/report/route.ts) using [`lib/report/ReportDocument.tsx`](./lib/report/ReportDocument.tsx) and [`lib/report/data.ts`](./lib/report/data.ts).
